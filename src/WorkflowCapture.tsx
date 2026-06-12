@@ -563,6 +563,7 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
   const [decQuery, setDecQuery] = useState("");
   const [decStatus, setDecStatus] = useState("All");
   const [decStep, setDecStep] = useState("All");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [aiReview, setAiReview] = useState(null);
   const [links, setLinks] = useState(projectLinks || []);
   const [linkDraft, setLinkDraft] = useState(null); // { label, url } when the add-link modal is open
@@ -691,6 +692,7 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
     return true;
   });
   const decSteps = Array.from(new Set(decisions.map((d) => d.workflowStep).filter(Boolean)));
+  const filtersActive = decStatus !== "All" || decStep !== "All";
 
   // ----- Decision exports -----
   const LOG_HEADERS = ["id", "date", "status", "subject", "decision", "context", "rationale", "optionsConsidered", "decisionOwner", "workflowStep", "otherLink"];
@@ -928,17 +930,17 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
           {INFO_FIELDS.map((f) => (
             <div key={f.key}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <label style={labelStyle}>{f.label}</label>
-                {f.key === "logLink" && (
-                  <button onClick={() => setLinkDraft({ label: "", url: "" })} style={{
-                    fontFamily: SANS, fontSize: 11, fontWeight: 600, color: ACCENT, background: "none",
-                    border: "none", cursor: "pointer", padding: 0, marginBottom: 3,
-                  }}>+ add links</button>
-                )}
-              </div>
-              <input type={f.type || "text"} value={info[f.key] || ""} style={inputStyle}
-                onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
+              <label style={labelStyle}>{f.label}</label>
+              {f.key === "logLink" ? (
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input type={f.type || "text"} value={info[f.key] || ""} style={{ ...inputStyle, flex: 1 }}
+                    onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
+                  <Btn small onClick={() => setLinkDraft({ label: "", url: "" })}>+ add links</Btn>
+                </div>
+              ) : (
+                <input type={f.type || "text"} value={info[f.key] || ""} style={inputStyle}
+                  onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
+              )}
               {f.key === "logLink" && links.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                   {links.map((pl, i) => (
@@ -1129,6 +1131,46 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
           <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>Decisions</h2>
           <Pill tone="neutral">{decisions.length} logged</Pill>
           <span style={{ flex: 1 }} />
+          {decisions.length > 0 && (
+            <>
+              <input value={decQuery} onChange={(e) => setDecQuery(e.target.value)} placeholder="Search decisions…"
+                style={{ width: 200, fontFamily: SANS, fontSize: 13, color: INK, background: CARD_BG,
+                  border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 11px", outline: "none" }} />
+              <div style={{ position: "relative" }}>
+                <button onClick={() => setFilterOpen((o) => !o)} title="Filters" style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center", width: 36, height: 34,
+                  borderRadius: 8, cursor: "pointer", background: filtersActive ? ACCENT_SOFT : CARD_BG,
+                  border: `1px solid ${filtersActive ? ACCENT : BORDER}`, color: filtersActive ? ACCENT : MUTED, position: "relative",
+                }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
+                  {filtersActive && <span style={{ position: "absolute", top: 5, right: 6, width: 6, height: 6, borderRadius: "50%", background: ACCENT }} />}
+                </button>
+                {filterOpen && (
+                  <>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setFilterOpen(false)} />
+                    <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 95, background: CARD_BG,
+                      border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.14)", padding: 12, width: 220 }}>
+                      <label style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: MUTED, fontFamily: SANS }}>Status</label>
+                      <select value={decStatus} onChange={(e) => setDecStatus(e.target.value)} style={{ ...selectStyle, width: "100%", margin: "4px 0 12px" }}>
+                        <option>All</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
+                      </select>
+                      <label style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: MUTED, fontFamily: SANS }}>Workflow step</label>
+                      <select value={decStep} onChange={(e) => setDecStep(e.target.value)} style={{ ...selectStyle, width: "100%", margin: "4px 0 12px" }}>
+                        <option>All</option>{decSteps.map((s) => <option key={s}>{s}</option>)}
+                      </select>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: 11.5, color: MUTED }}>{decView.length} of {decisions.length}</span>
+                        <button onClick={() => { setDecStatus("All"); setDecStep("All"); }} disabled={!filtersActive} style={{
+                          fontFamily: SANS, fontSize: 11.5, fontWeight: 600, color: filtersActive ? ACCENT : MUTED,
+                          background: "none", border: "none", cursor: filtersActive ? "pointer" : "default", padding: 0,
+                        }}>Clear</button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
           <Menu label="Export ▾" disabled={decisions.length === 0} items={[
             { label: "Text (.txt)", onClick: () => requestExport("text") },
             { label: "Excel (.csv)", onClick: () => requestExport("excel") },
@@ -1153,18 +1195,6 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
           </div>
         ) : (
           <>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-              <input value={decQuery} onChange={(e) => setDecQuery(e.target.value)} placeholder="Search decisions…"
-                style={{ flex: 1, minWidth: 180, fontFamily: SANS, fontSize: 13, color: INK, background: CARD_BG,
-                  border: `1px solid ${BORDER}`, borderRadius: 9, padding: "8px 11px", outline: "none" }} />
-              <select value={decStatus} onChange={(e) => setDecStatus(e.target.value)} style={selectStyle}>
-                <option>All</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
-              </select>
-              <select value={decStep} onChange={(e) => setDecStep(e.target.value)} style={selectStyle}>
-                <option>All</option>{decSteps.map((s) => <option key={s}>{s}</option>)}
-              </select>
-              <span style={{ fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{decView.length} of {decisions.length}</span>
-            </div>
             {decView.length === 0 ? (
               <div style={{ border: `1.5px dashed ${BORDER}`, borderRadius: 14, padding: "22px 20px", textAlign: "center", color: MUTED, fontSize: 13 }}>
                 No decisions match these filters.
