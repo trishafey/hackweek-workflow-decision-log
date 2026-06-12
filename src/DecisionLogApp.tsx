@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from "react";
 import {
   Plus, Sparkles, Settings, Download, Upload, Copy, Trash2, Pencil, X,
   ChevronUp, ChevronDown, ChevronsUpDown, Check, FileJson, FileSpreadsheet,
-  AlertCircle, Loader2, ClipboardCopy, Info, ChevronDown as Caret
+  AlertCircle, Loader2, ClipboardCopy, Info, Link2, ChevronDown as Caret
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -407,6 +407,68 @@ function normalizeDraft(o) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Populate missing fields (heuristic suggestions)                    */
+/* ------------------------------------------------------------------ */
+
+// Fields the "populate missing fields" action may fill — not links, notes, options, or owner.
+const FILLABLE_LOG = [["subject", "Subject"], ["context", "Context"], ["rationale", "Rationale"]];
+
+function suggestLogField(e, field) {
+  if (field === "subject") {
+    const w = (e.decision || "").replace(/^["'“”]+|["'“”]+$/g, "").split(/\s+/).slice(0, 3).join(" ");
+    return w || "General";
+  }
+  if (field === "context")
+    return `Came up in “${e.workflowStep || "the workflow"}”${e.subject ? ` — ${e.subject}` : ""}.`;
+  return `Chosen to move “${(e.decision || "this").slice(0, 80)}” forward; revisit if constraints change.`;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Notes parsing (deterministic — handles exported .txt + freeform)  */
+/* ------------------------------------------------------------------ */
+
+const EXPORT_LABELS = {
+  "date": "date", "status": "status", "subject": "subject", "decision owner": "decisionOwner",
+  "decision": "decision", "context": "context", "rationale": "rationale",
+  "options considered": "optionsConsidered", "workflow step": "workflowStep",
+  "other link": "otherLink", "other link label": "otherLinkLabel", "notes": "notes",
+};
+
+function parseExportedNotes(text) {
+  let blocks = text.split(/\n\s*[—–-]{3,}\s*\n/);
+  if (blocks.length < 2) blocks = text.split(/\n(?=DECISION\s+\d+)/i);
+  return blocks.map((block) => {
+    const e = emptyEntry(); e.id = "";
+    let curKey = null;
+    block.split(/\r?\n/).forEach((line) => {
+      const m = /^([A-Za-z][A-Za-z ]+?):\s?(.*)$/.exec(line);
+      const key = m && EXPORT_LABELS[m[1].trim().toLowerCase()];
+      if (key) { curKey = key; e[curKey] = m[2]; }
+      else if (/^DECISION\s+\d+/i.test(line.trim())) { curKey = null; }
+      else if (curKey) { e[curKey] += (e[curKey] ? "\n" : "") + line; }
+    });
+    if (!STATUSES.includes((e.status || "").trim())) e.status = "Proposed";
+    else e.status = e.status.trim();
+    e.date = (e.date || "").trim();
+    return e;
+  }).filter((e) => (`${e.decision}${e.subject}${e.context}${e.rationale}`).trim());
+}
+
+function parseNotes(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return [];
+  if (/\n?\s*Decision:\s/i.test(text) && /(DECISION\s+\d+|Status:|Rationale:|Context:)/i.test(text)) {
+    const parsed = parseExportedNotes(text);
+    if (parsed.length) return parsed;
+  }
+  return text
+    .split(/\n{2,}|\r?\n(?=[-•*]\s)|\r?\n(?=\d+[.)]\s)/)
+    .map((s) => s.replace(/^[\s\-•*]+/, "").replace(/^\d+[.)]\s*/, "").trim())
+    .filter(Boolean)
+    .map((t) => ({ ...emptyEntry(), id: "", decision: t }));
+}
+
+/* ------------------------------------------------------------------ */
 /*  Small UI pieces                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -434,11 +496,12 @@ function FieldLabel({ label, desc }) {
   );
 }
 
-function Field({ field, value, onChange, subjects }) {
+function Field({ field, value, onChange, subjects, highlight }) {
   const id = "f-" + field.key;
+  const cls = "field" + (highlight ? " field-filled" : "");
   if (field.type === "textarea") {
     return (
-      <label className="field">
+      <label className={cls}>
         <FieldLabel label={field.label} desc={field.desc} />
         <textarea
           id={id} className="input textarea" rows={field.key === "decision" ? 3 : 2}
@@ -449,7 +512,7 @@ function Field({ field, value, onChange, subjects }) {
   }
   if (field.type === "status") {
     return (
-      <label className="field">
+      <label className={cls}>
         <FieldLabel label={field.label} desc={field.desc} />
         <select id={id} className="input" value={value || "Proposed"} onChange={(e) => onChange(field.key, e.target.value)}>
           {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -459,7 +522,7 @@ function Field({ field, value, onChange, subjects }) {
   }
   if (field.type === "subject") {
     return (
-      <label className="field">
+      <label className={cls}>
         <FieldLabel label={field.label} desc={field.desc} />
         <input
           id={id} className="input" list="subject-list" value={value || ""}
@@ -471,7 +534,7 @@ function Field({ field, value, onChange, subjects }) {
   }
   const isUrl = typeof value === "string" && /^https?:\/\//i.test(value.trim());
   return (
-    <label className="field">
+    <label className={cls}>
       <FieldLabel label={field.label} desc={field.desc} />
       <input
         id={id} className="input" type={field.type === "date" ? "date" : "text"}
@@ -579,6 +642,7 @@ export default function DecisionLog({
   const setSettings = (u) => onChange((p) => ({ ...p, settings: typeof u === "function" ? u(p.settings) : u }));
   const setMeta = (k, v) => onChange((p) => ({ ...p, [k]: v }));
 
+  const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [subjectFilter, setSubjectFilter] = useState("All");
   const [sort, setSort] = useState({ key: "id", dir: "desc" });
@@ -596,7 +660,10 @@ export default function DecisionLog({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [toast, setToast] = useState(null);
+  const [populateReview, setPopulateReview] = useState(null); // { items } for the across-log review modal
+  const [aiFilled, setAiFilled] = useState([]); // drawer field keys just populated (for highlight)
   const fileInput = useRef(null);
+  const notesFileInput = useRef(null);
 
   const subjects = useMemo(() => {
     const set = new Set();
@@ -611,9 +678,11 @@ export default function DecisionLog({
 
   /* ---- derived table ---- */
   const view = useMemo(() => {
+    const q = query.trim().toLowerCase();
     let rows = entries.filter((e) =>
       (statusFilter === "All" || e.status === statusFilter) &&
-      (subjectFilter === "All" || e.subject === subjectFilter)
+      (subjectFilter === "All" || e.subject === subjectFilter) &&
+      (!q || `${e.id} ${e.subject} ${e.decision} ${e.context} ${e.rationale} ${e.optionsConsidered} ${e.workflowStep} ${e.decisionOwner} ${e.notes || ""}`.toLowerCase().includes(q))
     );
     const { key, dir } = sort;
     rows = [...rows].sort((a, b) => {
@@ -635,7 +704,7 @@ export default function DecisionLog({
         : String(bv).localeCompare(String(av));
     });
     return rows;
-  }, [entries, statusFilter, subjectFilter, sort]);
+  }, [entries, statusFilter, subjectFilter, sort, query]);
 
   function toggleSort(key) {
     setSort((s) => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
@@ -645,12 +714,57 @@ export default function DecisionLog({
   function openAdd() {
     const e = emptyEntry();
     e.id = makeId(settings.prefix, settings.workflow, nextNumber(entries));
+    setAiFilled([]);
     setDrawer(e);
     setDrawerMode("add");
   }
   function openEdit(entry) {
+    setAiFilled([]);
     setDrawer({ ...entry });
     setDrawerMode("edit");
+  }
+
+  /* ---- Populate missing fields ---- */
+  // In the open drawer: fill empty fillable fields and highlight what changed (user saves to confirm).
+  function populateDrawer() {
+    if (!drawer) return;
+    const filled = [];
+    const nd = { ...drawer };
+    FILLABLE_LOG.forEach(([f]) => {
+      if (!(nd[f] || "").trim()) { nd[f] = suggestLogField(nd, f); filled.push(f); }
+    });
+    if (!filled.length) { flash("No missing fields to populate"); return; }
+    setDrawer(nd);
+    setAiFilled(filled);
+  }
+  // Across the whole log: open a review (approve / deny / skip) before applying.
+  function openPopulateReview() {
+    const items = [];
+    entries.forEach((e) => {
+      if (!(e.decision || "").trim()) return;
+      FILLABLE_LOG.forEach(([f, label]) => {
+        if (!(e[f] || "").trim()) items.push({ id: e.id, field: f, label, suggestion: suggestLogField(e, f), action: "approve" });
+      });
+    });
+    if (!items.length) { flash("No missing fields to populate"); return; }
+    setPopulateReview({ items });
+  }
+  function setReviewAction(idx, action) {
+    setPopulateReview((r) => ({ ...r, items: r.items.map((it, i) => (i === idx ? { ...it, action } : it)) }));
+  }
+  function applyPopulateReview() {
+    const approved = populateReview.items.filter((it) => it.action === "approve");
+    if (approved.length) {
+      setEntries((prev) => prev.map((e) => {
+        const ups = approved.filter((a) => a.id === e.id);
+        if (!ups.length) return e;
+        const ne = { ...e };
+        ups.forEach((a) => { ne[a.field] = a.suggestion; });
+        return ne;
+      }));
+      flash(`Populated ${approved.length} field${approved.length === 1 ? "" : "s"}`);
+    }
+    setPopulateReview(null);
   }
   function saveDrawer() {
     if (!drawer) return;
@@ -670,6 +784,7 @@ export default function DecisionLog({
   }
   function setDrawerField(k, v) {
     setDrawer((d) => ({ ...d, [k]: v }));
+    setAiFilled((f) => (f.includes(k) ? f.filter((x) => x !== k) : f));
   }
 
   /* ---- AI ---- */
@@ -677,7 +792,7 @@ export default function DecisionLog({
     if (!notes.trim()) return;
     setAiLoading(true); setAiError(""); setDrafts(null);
     try {
-      const result = await callClaude(notes);
+      const result = parseNotes(notes);
       if (!result.length) {
         setAiError("No decisions were found in those notes. Try adding a bit more detail.");
       } else {
@@ -782,7 +897,7 @@ export default function DecisionLog({
             <div className="proj-links">
               {(log.projectLinks || []).map((pl, i) => (
                 <a key={i} className="link-pill" href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url}>
-                  {pl.label || pl.url}
+                  <Link2 size={11} />{pl.label || pl.url}
                 </a>
               ))}
             </div>
@@ -822,8 +937,12 @@ export default function DecisionLog({
         <button className="btn solid" onClick={openAdd}>
           <Plus size={15} /> Add decision
         </button>
+        <button className="btn ghost" onClick={() => openPopulateReview()} disabled={entries.length === 0}>
+          <Sparkles size={15} /> Populate missing fields
+        </button>
 
         <div className="filters">
+          <input className="dl-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search decisions…" />
           <label className="filter">
             <span>Status</span>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -894,7 +1013,7 @@ export default function DecisionLog({
                 <td className="dim">
                   {e.otherLink
                     ? <a className="link-pill" href={e.otherLink} target="_blank" rel="noopener noreferrer"
-                        title={e.otherLink} onClick={(ev) => ev.stopPropagation()}>{e.otherLinkLabel || "Link"}</a>
+                        title={e.otherLink} onClick={(ev) => ev.stopPropagation()}><Link2 size={11} />{e.otherLinkLabel || "Link"}</a>
                     : <span className="dim">—</span>}
                 </td>
                 <td className="row-actions" onClick={(ev) => ev.stopPropagation()}>
@@ -926,8 +1045,17 @@ export default function DecisionLog({
               <button className="icon-btn" onClick={() => setDrawer(null)}><X size={18} /></button>
             </div>
             <div className="drawer-body">
+              <button className="btn ghost drawer-populate" onClick={populateDrawer}>
+                <Sparkles size={14} /> Populate missing fields
+              </button>
+              {aiFilled.length > 0 && (
+                <div className="ai-filled-note">
+                  <Sparkles size={13} /> Highlighted fields were AI-populated — review, then save to confirm.
+                </div>
+              )}
               {FIELDS.map((f) => (
-                <Field key={f.key} field={f} value={drawer[f.key]} onChange={setDrawerField} subjects={subjects} />
+                <Field key={f.key} field={f} value={drawer[f.key]} onChange={setDrawerField}
+                  subjects={subjects} highlight={aiFilled.includes(f.key)} />
               ))}
               <Attachments
                 items={drawer.attachments || []}
@@ -969,16 +1097,33 @@ export default function DecisionLog({
             <div className="modal-body">
               {!drafts && (
                 <>
-                  <textarea
-                    className="input notes-box"
-                    placeholder={"Paste messy notes here, e.g.\n\n— Decided to batch low-priority alerts into a daily digest. Too many pings. Priya owns.\n— Killed the in-house search index idea, too much upkeep for v1.\n— Maybe explore offline mode later?"}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    disabled={aiLoading}
-                  />
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+                      if (file) { const r = new FileReader(); r.onload = () => setNotes(String(r.result)); r.readAsText(file); }
+                    }}
+                  >
+                    <textarea
+                      className="input notes-box"
+                      placeholder={"Paste notes, type multiple decisions, or drop a .txt export here.\n\n— Decided to batch low-priority alerts into a daily digest. Too many pings. Priya owns.\n— Killed the in-house search index idea, too much upkeep for v1.\n— Maybe explore offline mode later?"}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      disabled={aiLoading}
+                    />
+                  </div>
+                  <div className="notes-drop-row">
+                    <span>Drop a <strong>.txt</strong> export here, or</span>
+                    <button className="btn ghost small" onClick={() => notesFileInput.current && notesFileInput.current.click()}>
+                      <Upload size={13} /> Choose .txt file
+                    </button>
+                    <input ref={notesFileInput} type="file" accept=".txt,text/plain" style={{ display: "none" }}
+                      onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) { const r = new FileReader(); r.onload = () => setNotes(String(r.result)); r.readAsText(f); } e.target.value = ""; }} />
+                  </div>
                   {aiError && <div className="error"><AlertCircle size={15} /> {aiError}</div>}
                   <div className="modal-foot">
-                    <span className="hint-muted">Drafts are never added automatically — you accept each one.</span>
+                    <span className="hint-muted">Multiple decisions become individual drafts you accept one-by-one or all at once.</span>
                     <button className="btn accent" onClick={runParse} disabled={aiLoading || !notes.trim()}>
                       {aiLoading ? <><Loader2 size={15} className="spin" /> Parsing…</> : <><Sparkles size={15} /> Parse into drafts</>}
                     </button>
@@ -1125,6 +1270,46 @@ export default function DecisionLog({
         </>
       )}
 
+      {/* ---------------- Populate missing fields review ---------------- */}
+      {populateReview && (
+        <>
+          <div className="scrim" onClick={() => setPopulateReview(null)} />
+          <div className="modal">
+            <div className="modal-head">
+              <div className="modal-title">
+                <span className="ai-badge"><Sparkles size={15} /></span>
+                <div>
+                  <h2>Populate missing fields</h2>
+                  <p>{populateReview.items.length} empty field{populateReview.items.length === 1 ? "" : "s"} across this log. Approve, deny, or skip each AI-suggested draft — only approved ones are written.</p>
+                </div>
+              </div>
+              <button className="icon-btn" onClick={() => setPopulateReview(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {populateReview.items.map((it, i) => {
+                const e = entries.find((x) => x.id === it.id);
+                return (
+                  <div className="review-item" key={i}>
+                    <div className="review-meta"><span className="mono">{it.id}</span> · <strong>{it.label}</strong> · {(e?.decision || "decision").slice(0, 56)}</div>
+                    <p className="review-suggestion">“{it.suggestion}”</p>
+                    <div className="review-actions">
+                      {["approve", "deny", "skip"].map((a) => (
+                        <button key={a} className={"review-pick" + (it.action === a ? " on" : "")} onClick={() => setReviewAction(i, a)}>{a}</button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="modal-foot">
+              <span className="hint-muted">{populateReview.items.filter((it) => it.action === "approve").length} approved</span>
+              <button className="btn ghost" onClick={() => setPopulateReview(null)}>Cancel</button>
+              <button className="btn solid" onClick={applyPopulateReview}><Check size={15} /> Apply</button>
+            </div>
+          </div>
+        </>
+      )}
+
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
@@ -1240,11 +1425,37 @@ button.wf-link{border:none;border-bottom:1px solid var(--accent-soft);background
 .open-link:hover{text-decoration:underline}
 
 /* link pills */
-.link-pill{display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+.link-pill{display:inline-flex;align-items:center;gap:5px;max-width:100%;white-space:nowrap;overflow:hidden;
   vertical-align:bottom;font-size:11.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);
   padding:3px 9px;border-radius:11px;text-decoration:none;transition:background .12s}
 .link-pill:hover{background:#dde8e2}
+.link-pill svg{flex-shrink:0}
 .proj-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+
+/* decisions search box */
+.dl-search{font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:8px;padding:6px 10px;width:180px}
+.dl-search:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+
+/* drawer populate + AI-filled highlight */
+.drawer-populate{align-self:flex-start}
+.ai-filled-note{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--accent);
+  background:var(--accent-tint);border:1px solid var(--accent-soft);border-radius:9px;padding:8px 11px}
+.field-filled .input{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.field-filled .field-label::after{content:"AI";font-size:8.5px;font-weight:700;letter-spacing:.04em;
+  color:#fff;background:var(--accent);border-radius:4px;padding:1px 4px;margin-left:2px}
+
+/* review modal items */
+.review-item{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.review-meta{font-size:11px;color:var(--ink-faint);margin-bottom:5px}
+.review-suggestion{font-size:12.5px;font-style:italic;color:var(--ink);margin:0 0 8px;line-height:1.45}
+.review-actions{display:flex;gap:6px}
+.review-pick{font-family:inherit;font-size:11.5px;font-weight:600;text-transform:capitalize;
+  padding:5px 11px;border-radius:7px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink-faint)}
+.review-pick.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+
+/* notes drop row */
+.notes-drop-row{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:12px;color:var(--ink-faint)}
 
 /* project links editor */
 .pl-row{display:flex;gap:8px;align-items:center}

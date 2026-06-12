@@ -331,6 +331,17 @@ function GrowBox({ value, onChange, placeholder, small }) {
   );
 }
 
+// ---------- Link icon ----------
+function LinkGlyph({ size = 11 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
 // ---------- Pill ----------
 function Pill({ children, tone, bg, fg, onClick }) {
   const tones = {
@@ -556,7 +567,7 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
   const decIdRef = useRef(
     init.decisions.reduce((m, x) => Math.max(m, (parseInt(String(x.id).replace(/\D/g, ""), 10) || 0) + 1), 1));
   const [showPreview, setShowPreview] = useState(false);
-  const [showDesc, setShowDesc] = useState(false);
+  const [showDesc, setShowDesc] = useState(true);
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const [focusCol, setFocusCol] = useState(null);
@@ -906,9 +917,9 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
               {links.map((pl, i) => (
                 <a key={i} href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{
-                  fontSize: 11.5, fontWeight: 600, color: ACCENT, background: ACCENT_SOFT,
-                  padding: "3px 9px", borderRadius: 999, textDecoration: "none", fontFamily: SANS,
-                }}>{pl.label || pl.url}</a>
+                  display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600,
+                  color: ACCENT, background: ACCENT_SOFT, padding: "3px 9px", borderRadius: 999, textDecoration: "none", fontFamily: SANS,
+                }}><LinkGlyph />{pl.label || pl.url}</a>
               ))}
             </div>
           )}
@@ -948,7 +959,7 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
                       display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
                       color: ACCENT, background: ACCENT_SOFT, padding: "3px 6px 3px 9px", borderRadius: 999, fontFamily: SANS,
                     }}>
-                      <a href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{ color: ACCENT, textDecoration: "none" }}>{pl.label || pl.url}</a>
+                      <a href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{ display: "inline-flex", alignItems: "center", gap: 4, color: ACCENT, textDecoration: "none" }}><LinkGlyph />{pl.label || pl.url}</a>
                       <button onClick={() => setLinks(links.filter((_, idx) => idx !== i))} title="Remove" style={{
                         border: "none", background: "none", color: ACCENT, cursor: "pointer", fontSize: 12, lineHeight: 1, padding: 0,
                       }}>✕</button>
@@ -964,48 +975,36 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
       {/* ---------- Capture grid ---------- */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
         <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>Capture grid</h2>
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: showDesc ? ACCENT : MUTED, fontFamily: SANS }}>Descriptions</span>
-            <span role="switch" aria-checked={showDesc} tabIndex={0}
-              onClick={() => setShowDesc((v) => !v)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowDesc((v) => !v); } }}
-              style={{
-                position: "relative", width: 36, height: 20, borderRadius: 999, flexShrink: 0,
-                background: showDesc ? ACCENT : "#D8D4CC", transition: "background .15s",
-                display: "inline-block",
-              }}>
-              <span style={{
-                position: "absolute", top: 2, left: showDesc ? 18 : 2, width: 16, height: 16,
-                borderRadius: "50%", background: "#FDFCFA", transition: "left .15s",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
-              }} />
-            </span>
-          </label>
-          <Btn onClick={addColumn}>+ Add step</Btn>
-        </div>
+        <Btn onClick={addColumn}>+ Add step</Btn>
       </div>
 
       <div style={{ overflowX: "auto", border: `1px solid ${BORDER}`, borderRadius: 14, background: CARD_BG, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: 220 + (showDesc ? DESC_W : 0) + columns.length * 260 }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: 220 + (showDesc ? DESC_W : 34) + columns.length * 260 }}>
           <thead>
             <tr>
               <th style={{
                 position: "sticky", left: 0, zIndex: 10, background: "#F5F3EF",
-                borderBottom: `2px solid ${ACCENT}`, borderRight: showDesc ? "none" : `1px solid ${BORDER}`,
+                borderBottom: `2px solid ${ACCENT}`, borderRight: "none",
                 padding: "10px 14px", textAlign: "left", minWidth: 210, width: 210,
                 fontFamily: SANS, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em",
                 textTransform: "uppercase", color: MUTED,
               }}>Field</th>
-              {showDesc && (
-                <th style={{
-                  position: "sticky", left: 210, zIndex: 10, background: "#F5F3EF",
-                  borderBottom: `2px solid ${ACCENT}`, borderRight: `1px solid ${BORDER}`,
-                  padding: "10px 14px", textAlign: "left", minWidth: DESC_W, width: DESC_W,
-                  fontFamily: SANS, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em",
-                  textTransform: "uppercase", color: MUTED,
-                }}>Description</th>
-              )}
+              <th style={{
+                position: "sticky", left: 210, zIndex: 10, background: "#F5F3EF",
+                borderBottom: `2px solid ${ACCENT}`, borderRight: `1px solid ${BORDER}`,
+                padding: showDesc ? "10px 14px" : "10px 6px", textAlign: "left",
+                minWidth: showDesc ? DESC_W : 34, width: showDesc ? DESC_W : 34,
+                fontFamily: SANS, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em",
+                textTransform: "uppercase", color: MUTED, whiteSpace: "nowrap",
+              }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <button onClick={() => setShowDesc((v) => !v)} title={showDesc ? "Collapse descriptions" : "Show descriptions"}
+                    style={{ border: "none", background: "none", cursor: "pointer", color: ACCENT, padding: 0, fontSize: 15, lineHeight: 1, display: "inline-flex", alignItems: "center" }}>
+                    {showDesc ? "‹" : "›"}
+                  </button>
+                  {showDesc && <span>Description</span>}
+                </span>
+              </th>
               {columns.map((col, i) => (
                 <th key={col.id} id={"wfcol-" + col.id} style={{
                   background: focusCol === col.id ? ACCENT_SOFT : "#F5F3EF", borderBottom: `2px solid ${ACCENT}`,
@@ -1040,7 +1039,7 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
                     position: "sticky", left: 0, zIndex: 5,
                     background: isAI ? ACCENT_SOFT : "#FBFAF8",
                     borderBottom: ri < ROWS.length - 1 ? `1px solid ${BORDER}` : "none",
-                    borderRight: showDesc ? "none" : `1px solid ${BORDER}`,
+                    borderRight: "none",
                     padding: "10px 14px", verticalAlign: "top", width: 210, minWidth: 210,
                   }}>
                     <span style={{
@@ -1048,20 +1047,18 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
                       fontFamily: SANS, lineHeight: 1.3,
                     }} title={row.tip}>{row.label}</span>
                   </td>
-                  {showDesc && (
-                    <td style={{
-                      position: "sticky", left: 210, zIndex: 5,
-                      background: isAI ? ACCENT_SOFT : "#FBFAF8",
-                      borderBottom: ri < ROWS.length - 1 ? `1px solid ${BORDER}` : "none",
-                      borderRight: `1px solid ${BORDER}`,
-                      padding: "10px 14px", verticalAlign: "top", width: DESC_W, minWidth: DESC_W,
-                    }}>
-                      <span style={{
-                        fontSize: 11.5, color: MUTED, fontFamily: SANS, lineHeight: 1.45,
-                        fontStyle: "italic",
-                      }}>{row.tip}</span>
-                    </td>
-                  )}
+                  <td style={{
+                    position: "sticky", left: 210, zIndex: 5,
+                    background: isAI ? ACCENT_SOFT : "#FBFAF8",
+                    borderBottom: ri < ROWS.length - 1 ? `1px solid ${BORDER}` : "none",
+                    borderRight: `1px solid ${BORDER}`,
+                    padding: showDesc ? "10px 14px" : "10px 6px", verticalAlign: "top",
+                    width: showDesc ? DESC_W : 34, minWidth: showDesc ? DESC_W : 34,
+                  }}>
+                    {showDesc && (
+                      <span style={{ fontSize: 11.5, color: MUTED, fontFamily: SANS, lineHeight: 1.45, fontStyle: "italic" }}>{row.tip}</span>
+                    )}
+                  </td>
                   {columns.map((col, ci) => {
                     const val = cells[col.id]?.[row.key] || "";
                     const isBranch = row.key === "branches";
