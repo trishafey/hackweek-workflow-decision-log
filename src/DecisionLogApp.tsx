@@ -29,11 +29,13 @@ const STATUS_STYLE = {
 const COLUMNS = [
   { key: "id", label: "ID", w: 118, desc: "Project code (2–3 letters) · workflow code (2–3 letters) · 3-digit chronological number. Set the codes in Settings." },
   { key: "date", label: "Date", w: 104, desc: "When the decision was made." },
-  { key: "status", label: "Status", w: 130, desc: "The current status of the decision." },
-  { key: "subject", label: "Subject", w: 120, desc: "What the decision is about — a controlled tag, used for filtering." },
-  { key: "decision", label: "Decision", w: 320, desc: "A clear, concise statement of what was decided." },
-  { key: "workflowStep", label: "Workflow step", w: 140, desc: "Links the decision to a specific step in the workflow.\nPrevents floating, contextless decisions." },
-  { key: "decisionOwner", label: "Owner", w: 120, desc: "Who made the final decision. Establishes accountability." },
+  { key: "status", label: "Status", w: 120, desc: "The current status of the decision." },
+  { key: "subject", label: "Subject", w: 140, desc: "What the decision is about — a controlled tag, used for filtering." },
+  { key: "decision", label: "Decision", w: 280, desc: "A clear, concise statement of what was decided." },
+  { key: "context", label: "Context", w: 230, desc: "What problem or trigger led to this decision?\nInclude constraints, assumptions, or the scenario." },
+  { key: "rationale", label: "Rationale", w: 240, desc: "Why this option was chosen.\nInclude tradeoffs, risks, and constraints." },
+  { key: "workflowStep", label: "Workflow step", w: 150, desc: "Links the decision to a specific step in the workflow.\nPrevents floating, contextless decisions." },
+  { key: "decisionOwner", label: "Owner", w: 170, desc: "Who made the final decision. Establishes accountability." },
 ];
 
 // full field schema (used for forms / export / AI mapping)
@@ -205,6 +207,28 @@ const SEED_OWNERS = [
   "Trish, Lauren, & Jenevine",
   "Shokoh, Trish, & Jenevine",
   "Jenevine, Lauren, Shokoh, & Trish",
+];
+
+const SEED_SUBJECTS = [
+  "Occasion detection",
+  "Weather push",
+  "Travel awareness",
+  "Item planning",
+  "Clarification",
+  "Voice brief",
+  "Outfit explanation",
+  "Weather-aware",
+  "Trend lookup",
+  "Purchase ideas",
+  "Vibe feedback",
+  "Fine tuning",
+  "Item swapping",
+  "Outfit preview",
+  "Repeat avoidance",
+  "Look book",
+  "Style learning",
+  "Declutter",
+  "Wear tracker",
 ];
 
 /* ------------------------------------------------------------------ */
@@ -449,7 +473,7 @@ function Field({ field, value, onChange, subjects }) {
 /* ------------------------------------------------------------------ */
 
 export default function DecisionLog() {
-  const [entries, setEntries] = useState(() => SEED.map((e, i) => ({ ...e, decisionOwner: SEED_OWNERS[i] || e.decisionOwner })));
+  const [entries, setEntries] = useState(() => SEED.map((e, i) => ({ ...e, decisionOwner: SEED_OWNERS[i] || e.decisionOwner, subject: SEED_SUBJECTS[i] || e.subject })));
   const [settings, setSettings] = useState({ prefix: "DOG", workflow: "GEN" });
 
   const [statusFilter, setStatusFilter] = useState("All");
@@ -734,7 +758,16 @@ export default function DecisionLog() {
                 <td><StatusPill value={e.status} /></td>
                 <td>{e.subject ? <span className="subj">{e.subject}</span> : <span className="dim">—</span>}</td>
                 <td><div className="clamp" title={e.decision}>{e.decision || <span className="dim">—</span>}</div></td>
-                <td className="dim"><div className="ellipsis" title={e.workflowStep}>{e.workflowStep || "—"}</div></td>
+                <td><div className="clamp" title={e.context}>{e.context || <span className="dim">—</span>}</div></td>
+                <td><div className="clamp" title={e.rationale}>{e.rationale || <span className="dim">—</span>}</div></td>
+                <td className="dim">
+                  {e.workflowStep
+                    ? (e.otherLink
+                        ? <a className="wf-link" href={e.otherLink} target="_blank" rel="noopener noreferrer"
+                            title={`${e.workflowStep} → ${e.otherLink}`} onClick={(ev) => ev.stopPropagation()}>{e.workflowStep}</a>
+                        : <div className="ellipsis" title={e.workflowStep}>{e.workflowStep}</div>)
+                    : <span className="dim">—</span>}
+                </td>
                 <td className="dim"><div className="ellipsis" title={e.decisionOwner}>{e.decisionOwner || "—"}</div></td>
                 <td className="row-actions" onClick={(ev) => ev.stopPropagation()}>
                   <button className="icon-btn" title="Edit" onClick={() => openEdit(e)}><Pencil size={14} /></button>
@@ -1029,7 +1062,10 @@ const CSS = `
 .nowrap{white-space:nowrap}
 .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4;overflow-wrap:anywhere}
 .ellipsis{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.subj{display:inline-block;box-sizing:content-box;width:min-content;max-width:100%;
+.wf-link{display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  vertical-align:bottom;color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft);transition:border-color .12s}
+.wf-link:hover{border-bottom-color:var(--accent)}
+.subj{display:inline-block;box-sizing:content-box;width:fit-content;max-width:100%;
   font-size:12px;background:var(--line-soft);color:var(--ink-soft);padding:3px 9px;border-radius:11px;
   line-height:1.4;white-space:normal;overflow-wrap:break-word}
 .row-actions{text-align:right;white-space:nowrap}
