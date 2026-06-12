@@ -247,7 +247,7 @@ export const OUTFIT_ENTRIES = SEED.map((e, i) => ({
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function emptyEntry() {
+export function emptyEntry() {
   return {
     id: "", date: TODAY, status: "Proposed", subject: "", decision: "",
     context: "", rationale: "", optionsConsidered: "", decisionOwner: "",
@@ -255,7 +255,7 @@ function emptyEntry() {
   };
 }
 
-function nextNumber(entries) {
+export function nextNumber(entries) {
   let max = 0;
   for (const e of entries) {
     const m = /(\d+)\s*$/.exec(e.id || "");
@@ -264,7 +264,7 @@ function nextNumber(entries) {
   return max + 1;
 }
 
-function makeId(prefix, wf, n) {
+export function makeId(prefix, wf, n) {
   const p = (prefix || "PRJ").toUpperCase();
   const w = (wf || "WF").toUpperCase();
   return `${p}-${w}-${String(n).padStart(3, "0")}`;
@@ -411,9 +411,9 @@ function normalizeDraft(o) {
 /* ------------------------------------------------------------------ */
 
 // Fields the "populate missing fields" action may fill — not links, notes, options, or owner.
-const FILLABLE_LOG = [["subject", "Subject"], ["context", "Context"], ["rationale", "Rationale"]];
+export const FILLABLE_LOG = [["subject", "Subject"], ["context", "Context"], ["rationale", "Rationale"]];
 
-function suggestLogField(e, field) {
+export function suggestLogField(e, field) {
   if (field === "subject") {
     const w = (e.decision || "").replace(/^["'“”]+|["'“”]+$/g, "").split(/\s+/).slice(0, 3).join(" ");
     return w || "General";

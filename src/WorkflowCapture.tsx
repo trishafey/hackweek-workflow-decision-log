@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import CreateLogModal from "./CreateLogModal";
+import { FILLABLE_LOG, suggestLogField } from "./DecisionLogApp";
 
 // ---------- Theme ----------
 const ACCENT = "#1F3A34";
@@ -555,7 +557,10 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, onJu
 }
 
 // ---------- Main app ----------
-export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, projectLinks = [] }) {
+export default function WorkflowCapture({
+  initial, focusStep, onWorkflowsHome, projectLinks = [],
+  logsIndex = [], existingLogCodes = [], onCreateLog, onAddToLog, onUpdateLogEntries, onOpenLog,
+}) {
   const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
   const [info, setInfo] = useState(init.info);
   const [columns, setColumns] = useState(init.columns);
@@ -576,6 +581,8 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
   const [decStep, setDecStep] = useState("All");
   const [filterOpen, setFilterOpen] = useState(false);
   const [aiReview, setAiReview] = useState(null);
+  const [addToLog, setAddToLog] = useState(null); // { step, logId, items:[{d, action}], added }
+  const [logFill, setLogFill] = useState(null);   // { logId, items } post-add populate review
   const [links, setLinks] = useState(projectLinks || []);
   const [linkDraft, setLinkDraft] = useState(null); // { label, url } when the add-link modal is open
   const fileRef = useRef(null);
@@ -783,6 +790,57 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
     if (approved.length) setDecisions(final);
     setAiReview(null);
     runExport(format, final);
+  };
+
+  // ----- Add to Decision Log wizard -----
+  const openAddToLog = () => {
+    if (!decisions.length) return;
+    setAddToLog({
+      step: logsIndex.length ? "select" : "create",
+      logId: logsIndex.length ? logsIndex[0].id : null,
+      items: decisions.map((d) => ({ d, action: "accept" })),
+      added: [],
+    });
+  };
+
+  const setAddItemAction = (idx, action) =>
+    setAddToLog((a) => ({ ...a, items: a.items.map((it, i) => (i === idx ? { ...it, action } : it)) }));
+
+  const setAllAddItems = (action) =>
+    setAddToLog((a) => ({ ...a, items: a.items.map((it) => ({ ...it, action })) }));
+
+  const confirmAddToLog = () => {
+    const accepted = addToLog.items.filter((it) => it.action === "accept").map((it) => toLogEntry(it.d));
+    const ids = (onAddToLog && onAddToLog(addToLog.logId, accepted)) || [];
+    const added = accepted.map((e, i) => ({ ...e, id: ids[i] || "" }));
+    setAddToLog((a) => ({ ...a, step: "done", added }));
+    flash(`${accepted.length} decision${accepted.length === 1 ? "" : "s"} added to the log`);
+  };
+
+  // After adding: offer to populate missing fields on the entries that just landed.
+  const openLogFill = () => {
+    const items = [];
+    addToLog.added.forEach((e) => {
+      if (!(e.decision || "").trim()) return;
+      FILLABLE_LOG.forEach(([field, label]) => {
+        if (!(e[field] || "").trim())
+          items.push({ id: e.id, field, label, suggestion: suggestLogField(e, field), action: "approve", decision: e.decision });
+      });
+    });
+    if (!items.length) { flash("No missing fields to populate"); setAddToLog(null); return; }
+    setLogFill({ logId: addToLog.logId, items });
+    setAddToLog(null);
+  };
+
+  const setLogFillAction = (idx, action) =>
+    setLogFill((r) => ({ ...r, items: r.items.map((it, i) => (i === idx ? { ...it, action } : it)) }));
+
+  const applyLogFill = () => {
+    const approved = logFill.items.filter((it) => it.action === "approve")
+      .map((it) => ({ id: it.id, field: it.field, value: it.suggestion }));
+    if (approved.length && onUpdateLogEntries) onUpdateLogEntries(logFill.logId, approved);
+    flash(approved.length ? `Populated ${approved.length} field${approved.length === 1 ? "" : "s"} in the log` : "Nothing populated");
+    setLogFill(null);
   };
 
   // ----- AI pass-2 sweep: decisions found -----
@@ -1172,6 +1230,12 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
             title={pendingDecisions.length === 0 ? "No AI pass-2 cells filled yet" : ""}>
             ✨ Decisions found{pendingDecisions.length > 0 ? ` (${pendingDecisions.length})` : ""}
           </Btn>
+          {onAddToLog && (
+            <Btn onClick={openAddToLog} disabled={decisions.length === 0}
+              title={decisions.length === 0 ? "No decisions to add yet" : "Send these decisions to a decision log"}>
+              Add to Decision Log
+            </Btn>
+          )}
           <Btn primary onClick={() => { newDecision({}); flash("Decision added"); }}>+ Add decision</Btn>
         </div>
         <p style={{ fontSize: 12.5, color: MUTED, margin: "0 0 14px", maxWidth: 640 }}>
@@ -1280,6 +1344,159 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
               <Btn primary disabled={!(linkDraft.label.trim() || linkDraft.url.trim())}
                 onClick={() => { setLinks((ls) => [...ls, { label: linkDraft.label.trim(), url: linkDraft.url.trim() }]); setLinkDraft(null); flash("Link added"); }}>
                 Add link
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Add to Decision Log wizard ---------- */}
+      {addToLog && addToLog.step === "create" && (
+        <CreateLogModal
+          existingCodes={existingLogCodes}
+          onClose={() => (logsIndex.length ? setAddToLog((a) => ({ ...a, step: "select" })) : setAddToLog(null))}
+          onCreate={(meta) => {
+            const id = onCreateLog ? onCreateLog(meta) : null;
+            setAddToLog((a) => ({ ...a, logId: id, step: "review" }));
+          }}
+        />
+      )}
+      {addToLog && addToLog.step !== "create" && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(43,42,39,0.45)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+          onClick={() => setAddToLog(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: CARD_BG, borderRadius: 16, padding: "22px 24px", maxWidth: 620, width: "100%", maxHeight: "82vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.25)" }}>
+
+            {addToLog.step === "select" && (
+              <>
+                <h3 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 600, margin: "0 0 4px", color: ACCENT }}>Add to Decision Log</h3>
+                <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px" }}>
+                  Choose where these {decisions.length} decision{decisions.length === 1 ? "" : "s"} should go — or create a new log.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+                  {logsIndex.map((l) => (
+                    <label key={l.id} style={{
+                      display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+                      border: `1px solid ${addToLog.logId === l.id ? ACCENT : BORDER}`, borderRadius: 10,
+                      padding: "11px 13px", background: addToLog.logId === l.id ? "#F7FAF8" : "transparent",
+                    }}>
+                      <input type="radio" name="dest-log" checked={addToLog.logId === l.id}
+                        onChange={() => setAddToLog((a) => ({ ...a, logId: l.id }))} style={{ accentColor: ACCENT }} />
+                      <span style={{ fontFamily: SANS, fontSize: 13.5, fontWeight: 600, color: INK }}>{l.title}</span>
+                      <span style={{ marginLeft: "auto", fontFamily: "ui-monospace, monospace", fontSize: 11, color: MUTED }}>{l.code}</span>
+                    </label>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <Btn onClick={() => setAddToLog(null)}>Cancel</Btn>
+                  <Btn onClick={() => setAddToLog((a) => ({ ...a, step: "create" }))}>+ New log</Btn>
+                  <Btn primary disabled={!addToLog.logId} onClick={() => setAddToLog((a) => ({ ...a, step: "review" }))}>Continue</Btn>
+                </div>
+              </>
+            )}
+
+            {addToLog.step === "review" && (() => {
+              const acceptedCount = addToLog.items.filter((it) => it.action === "accept").length;
+              const destTitle = logsIndex.find((l) => l.id === addToLog.logId)?.title || "the decision log";
+              return (
+                <>
+                  <h3 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 600, margin: "0 0 4px", color: ACCENT }}>Review entries</h3>
+                  <p style={{ fontSize: 13, color: MUTED, margin: "0 0 12px" }}>
+                    Accept or reject each entry before it's added to “{destTitle}”.
+                  </p>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+                    <Btn small onClick={() => setAllAddItems("accept")}>Accept all</Btn>
+                    <Btn small onClick={() => setAllAddItems("reject")}>Reject all</Btn>
+                    <span style={{ marginLeft: "auto", fontSize: 12, color: MUTED }}>{acceptedCount} of {addToLog.items.length} accepted</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+                    {addToLog.items.map((it, i) => {
+                      const ss = STATUS_STYLE[it.d.status] || STATUS_STYLE["Proposed"];
+                      const rejected = it.action === "reject";
+                      return (
+                        <div key={it.d.id} style={{
+                          border: `1px solid ${rejected ? BORDER : ACCENT}`, borderRadius: 10, padding: "10px 12px",
+                          background: rejected ? "transparent" : "#F7FAF8", opacity: rejected ? 0.55 : 1,
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                            {it.d.workflowStep ? <Pill tone="accent">{it.d.workflowStep}</Pill> : null}
+                            <Pill bg={ss.bg} fg={ss.fg}>{it.d.status || "Proposed"}</Pill>
+                            <span style={{ flex: 1 }} />
+                            <Btn small primary={!rejected} onClick={() => setAddItemAction(i, "accept")}>Accept</Btn>
+                            <Btn small onClick={() => setAddItemAction(i, "reject")}>Reject</Btn>
+                          </div>
+                          <p style={{ fontSize: 12.5, margin: 0, lineHeight: 1.45, whiteSpace: "pre-wrap", fontFamily: SANS, color: INK }}>
+                            {(it.d.decision || "Untitled decision").slice(0, 300)}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <Btn onClick={() => setAddToLog(null)}>Cancel</Btn>
+                    <Btn primary disabled={acceptedCount === 0} onClick={confirmAddToLog}>
+                      Add {acceptedCount} to log
+                    </Btn>
+                  </div>
+                </>
+              );
+            })()}
+
+            {addToLog.step === "done" && (
+              <>
+                <h3 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 600, margin: "0 0 4px", color: ACCENT }}>
+                  ✓ Added to the log
+                </h3>
+                <p style={{ fontSize: 13, color: MUTED, margin: "0 0 16px" }}>
+                  {addToLog.added.length} decision{addToLog.added.length === 1 ? "" : "s"} now live in
+                  “{logsIndex.find((l) => l.id === addToLog.logId)?.title || "the decision log"}”
+                  ({addToLog.added[0]?.id}{addToLog.added.length > 1 ? ` – ${addToLog.added[addToLog.added.length - 1].id}` : ""}).
+                  You can optionally have AI draft any missing fields before you review them in the log.
+                </p>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                  <Btn onClick={() => setAddToLog(null)}>Done</Btn>
+                  <Btn onClick={openLogFill}>✨ Populate missing fields</Btn>
+                  {onOpenLog && <Btn primary onClick={() => onOpenLog(addToLog.logId)}>View log</Btn>}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Post-add populate review ---------- */}
+      {logFill && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(43,42,39,0.45)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+          onClick={() => setLogFill(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: CARD_BG, borderRadius: 16, padding: "22px 24px", maxWidth: 620, width: "100%", maxHeight: "82vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.25)" }}>
+            <h3 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 600, margin: "0 0 4px", color: ACCENT }}>✨ Populate missing fields</h3>
+            <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px" }}>
+              {logFill.items.length} field{logFill.items.length === 1 ? "" : "s"} are empty on the entries you just added. Approve, deny, or skip each draft — only approved drafts are written to the log.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+              {logFill.items.map((it, i) => (
+                <div key={i} style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>
+                    <span style={{ fontFamily: "ui-monospace, monospace" }}>{it.id}</span> · <span style={{ fontWeight: 700 }}>{it.label}</span> · {(it.decision || "decision").slice(0, 56)}
+                  </div>
+                  <p style={{ fontSize: 12.5, margin: "0 0 8px", lineHeight: 1.45, fontStyle: "italic", color: INK }}>“{it.suggestion}”</p>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["approve", "deny", "skip"].map((a) => (
+                      <button key={a} onClick={() => setLogFillAction(i, a)} style={{
+                        fontFamily: SANS, fontSize: 11.5, fontWeight: 600, textTransform: "capitalize",
+                        padding: "5px 11px", borderRadius: 7, cursor: "pointer",
+                        border: `1px solid ${it.action === a ? ACCENT : BORDER}`,
+                        background: it.action === a ? ACCENT_SOFT : CARD_BG,
+                        color: it.action === a ? ACCENT : MUTED,
+                      }}>{a}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn onClick={() => setLogFill(null)}>Cancel</Btn>
+              <Btn primary onClick={applyLogFill}>
+                Apply ({logFill.items.filter((it) => it.action === "approve").length} approved)
               </Btn>
             </div>
           </div>

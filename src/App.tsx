@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import DecisionLog, { OUTFIT_ENTRIES, ProjectLinksEditor } from "./DecisionLogApp";
+import DecisionLog, { OUTFIT_ENTRIES, ProjectLinksEditor, emptyEntry, makeId, nextNumber } from "./DecisionLogApp";
+import CreateLogModal, { code } from "./CreateLogModal";
 import { HACKWEEK_ENTRIES } from "./hackweekData";
 import WorkflowCapture from "./WorkflowCapture";
 
@@ -57,11 +58,6 @@ function summarize(entries) {
   return { count: entries.length, updated: dates[dates.length - 1] || "—" };
 }
 
-// Derive a default ID code (first n letters) from a product/feature name.
-function code(s, n = 3) {
-  const letters = (s || "").match(/[A-Za-z]/g) || [];
-  return letters.slice(0, n).join("").toUpperCase() || "LOG";
-}
 
 // A blank workflow-capture initial state, seeded only with name/product/owner.
 function blankWorkflow(name, product, owner) {
@@ -73,91 +69,6 @@ function blankWorkflow(name, product, owner) {
     columns: [{ id: "c0", name: "Trigger" }, { id: "c1", name: "Step 1" }],
     cells: {}, subflows: {}, decisions: [],
   };
-}
-
-/* ------------------------------------------------------------------ */
-/*  Create-log modal                                                  */
-/* ------------------------------------------------------------------ */
-
-const ID_STRUCTURE = "First 2–3 letters = project · next 2–5 letters = specific workflow · 3 digits = chronological decision number.";
-
-function CreateLogModal({ onClose, onCreate, existingCodes }) {
-  const [owner, setOwner] = useState("");
-  const [product, setProduct] = useState("");
-  const [feature, setFeature] = useState("");
-  const [logId, setLogId] = useState("");
-  const [workflowLink, setWorkflowLink] = useState("");
-  const [projectLinks, setProjectLinks] = useState([]);
-
-  const generate = () => setLogId(`${code(product, 3)}-${code(feature, 5)}-001`);
-  const m = /^([A-Za-z]{1,3})-([A-Za-z]{1,5})-(\d{1,3})$/.exec(logId.trim());
-  const codeKey = m ? `${m[1]}-${m[2]}`.toUpperCase() : null;
-  const taken = codeKey && (existingCodes || []).includes(codeKey);
-  const idValid = !!m && !taken;
-  const valid = owner.trim() && product.trim() && feature.trim() && idValid;
-
-  const submit = () => {
-    if (!valid) return;
-    onCreate({
-      owner: owner.trim(), product: product.trim(), feature: feature.trim(), workflowLink: workflowLink.trim(),
-      prefix: m[1].toUpperCase(), workflow: m[2].toUpperCase(),
-      projectLinks: projectLinks.filter((l) => (l.label || "").trim() || (l.url || "").trim()),
-    });
-  };
-
-  return (
-    <>
-      <div className="home-scrim" onClick={onClose} />
-      <div className="home-modal" role="dialog" aria-modal="true">
-        <div className="home-modal-head">
-          <div>
-            <h2>New decision log</h2>
-            <p>Create a log to record decisions for a product feature.</p>
-          </div>
-          <button className="home-x" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-        <div className="home-modal-body">
-          <label className="hm-field">
-            <span className="hm-label">Decision log owner<i>*</i></span>
-            <input className="hm-input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="e.g. Lauren (DPM)" autoFocus />
-          </label>
-          <div className="hm-grid">
-            <label className="hm-field">
-              <span className="hm-label">Product<i>*</i></span>
-              <input className="hm-input" value={product} onChange={(e) => setProduct(e.target.value)} placeholder="e.g. Outfit App" />
-            </label>
-            <label className="hm-field">
-              <span className="hm-label">Feature<i>*</i></span>
-              <input className="hm-input" value={feature} onChange={(e) => setFeature(e.target.value)} placeholder="e.g. Daily outfit generator" />
-            </label>
-          </div>
-          <label className="hm-field">
-            <span className="hm-label">
-              Log ID<i>*</i>
-              <span className="hm-info" tabIndex={0}>i<span className="hm-tip">{ID_STRUCTURE}</span></span>
-            </span>
-            <div className="hm-idrow">
-              <input className={"hm-input mono" + (logId && !idValid ? " hm-err" : "")} value={logId}
-                onChange={(e) => setLogId(e.target.value)} placeholder="e.g. OUT-DAILY-001" />
-              <button className="hm-btn" type="button" onClick={generate} disabled={!product.trim() || !feature.trim()}>Auto-generate</button>
-            </div>
-            {logId && !m && <span className="hm-error-text">Use the format PREFIX-WORKFLOW-001 (letters, then 3 digits).</span>}
-            {taken && <span className="hm-error-text">That Log ID is already taken — pick another.</span>}
-          </label>
-          <label className="hm-field">
-            <span className="hm-label">Link to workflow <em>(optional)</em></span>
-            <input className="hm-input" value={workflowLink} onChange={(e) => setWorkflowLink(e.target.value)} placeholder="https://… (FigJam, Lucid, docs, etc.)" />
-          </label>
-          <ProjectLinksEditor links={projectLinks} onChange={setProjectLinks} />
-          <p className="hm-note">All of these are editable later in the log's Settings.</p>
-        </div>
-        <div className="home-modal-foot">
-          <button className="hm-btn" onClick={onClose}>Cancel</button>
-          <button className="hm-btn primary" onClick={submit} disabled={!valid}>Create log</button>
-        </div>
-      </div>
-    </>
-  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -362,7 +273,9 @@ export default function App() {
 
   const updateLog = (id, updater) => setLogs((ls) => ls.map((l) => (l.id === id ? updater(l) : l)));
 
-  const createLog = ({ owner, product, feature, workflowLink, projectLinks, prefix, workflow }) => {
+  // Creates a log and returns its id without navigating (used by the
+  // workflow page's "Add to Decision Log" flow).
+  const createLogSilent = ({ owner, product, feature, workflowLink, projectLinks, prefix, workflow }) => {
     const id = "log-" + Date.now();
     setLogs((ls) => [...ls, {
       id, title: feature, owner, product, feature,
@@ -371,7 +284,42 @@ export default function App() {
       projectLinks: projectLinks || [],
       entries: [],
     }]);
+    return id;
+  };
+
+  const createLog = (meta) => {
+    const id = createLogSilent(meta);
     setRoute({ view: "log", id });
+  };
+
+  // Append entries to a log, assigning IDs from the log's code settings.
+  // Returns the assigned IDs in order.
+  const addEntriesToLog = (logId, drafts) => {
+    const log = logs.find((l) => l.id === logId);
+    if (!log) return [];
+    let n = nextNumber(log.entries);
+    const ids = [];
+    const withIds = drafts.map((d) => {
+      const id = makeId(log.settings.prefix, log.settings.workflow, n++);
+      ids.push(id);
+      return { ...emptyEntry(), ...d, id };
+    });
+    updateLog(logId, (p) => ({ ...p, entries: [...p.entries, ...withIds] }));
+    return ids;
+  };
+
+  // Apply field updates ({id, field, value}) to a log's entries.
+  const updateLogEntries = (logId, updates) => {
+    updateLog(logId, (p) => ({
+      ...p,
+      entries: p.entries.map((e) => {
+        const ups = updates.filter((u) => u.id === e.id);
+        if (!ups.length) return e;
+        const ne = { ...e };
+        ups.forEach((u) => { ne[u.field] = u.value; });
+        return ne;
+      }),
+    }));
   };
 
   const createWorkflow = ({ name, product, owner, projectLinks }) => {
@@ -393,6 +341,12 @@ export default function App() {
         projectLinks={wf?.projectLinks || []}
         focusStep={route.focusStep}
         onWorkflowsHome={() => setRoute({ view: "workflows" })}
+        logsIndex={logs.map((l) => ({ id: l.id, title: l.title, code: `${l.settings.prefix}-${l.settings.workflow}` }))}
+        existingLogCodes={logs.map((l) => `${l.settings.prefix}-${l.settings.workflow}`.toUpperCase())}
+        onCreateLog={createLogSilent}
+        onAddToLog={addEntriesToLog}
+        onUpdateLogEntries={updateLogEntries}
+        onOpenLog={(id) => setRoute({ view: "log", id })}
       />
     );
   }
