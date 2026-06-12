@@ -957,14 +957,23 @@ export default function DecisionLog({
         <div className="proj-links">
           {(log.projectLinks || []).map((pl, i) => {
             const live = pl.url && pl.url !== "#";
-            return live ? (
-              <a key={i} className="link-pill" href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url}>
+            if (!live) {
+              return (
+                <span key={i} className="link-pill link-pill-tbd" title="Link to be added">
+                  <Link2 size={11} />{pl.label || "Link"}
+                </span>
+              );
+            }
+            // Same-app links (contain a "#/" route) navigate in-app — no full reload.
+            const hi = pl.url.indexOf("#/");
+            return hi !== -1 ? (
+              <a key={i} className="link-pill" href={pl.url.slice(hi)} title={pl.url}>
                 <Link2 size={11} />{pl.label || pl.url}
               </a>
             ) : (
-              <span key={i} className="link-pill link-pill-tbd" title="Link to be added">
-                <Link2 size={11} />{pl.label || "Link"}
-              </span>
+              <a key={i} className="link-pill" href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url}>
+                <Link2 size={11} />{pl.label || pl.url}
+              </a>
             );
           })}
         </div>
