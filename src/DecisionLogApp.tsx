@@ -36,6 +36,7 @@ const COLUMNS = [
   { key: "rationale", label: "Rationale", w: 240, desc: "Why this option was chosen.\nInclude tradeoffs, risks, and constraints." },
   { key: "workflowStep", label: "Workflow step", w: 150, desc: "Links the decision to a specific step in the workflow.\nPrevents floating, contextless decisions." },
   { key: "decisionOwner", label: "Owner", w: 170, desc: "Who made the final decision. Establishes accountability." },
+  { key: "otherLink", label: "Other links", w: 130, desc: "Links to meeting notes, research, Lucid boards, Figma, etc." },
 ];
 
 // full field schema (used for forms / export / AI mapping)
@@ -51,7 +52,9 @@ const FIELDS = [
   { key: "optionsConsidered", label: "Options considered", type: "textarea", desc: "Capture at least 2–3 alternatives.\nShows the thinking — prevents future re-debates." },
   { key: "decisionOwner", label: "Decision owner", type: "text", desc: "Who made the final decision. Establishes accountability." },
   { key: "workflowStep", label: "Workflow step", type: "text", desc: "Links the decision to a specific step in the workflow.\nPrevents floating, contextless decisions." },
-  { key: "otherLink", label: "Other link", type: "text", desc: "Links to meeting notes, research, Lucid boards, Figma, etc." },
+  { key: "otherLinkLabel", label: "Other link label", type: "text", desc: "Display text for the link (e.g. FigJam, Research doc)." },
+  { key: "otherLink", label: "Other link URL", type: "text", desc: "Links to meeting notes, research, Lucid boards, Figma, etc." },
+  { key: "notes", label: "Notes", type: "textarea", desc: "Freeform notes. Shown only here in the drawer — not in the table." },
 ];
 
 const EXPORT_FIELDS = [
@@ -65,7 +68,9 @@ const EXPORT_FIELDS = [
   { key: "optionsConsidered", label: "Options Considered" },
   { key: "decisionOwner", label: "Decision Owner" },
   { key: "workflowStep", label: "Workflow Step" },
+  { key: "otherLinkLabel", label: "Other Link Label" },
   { key: "otherLink", label: "Other Link" },
+  { key: "notes", label: "Notes" },
 ];
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -246,7 +251,7 @@ function emptyEntry() {
   return {
     id: "", date: TODAY, status: "Proposed", subject: "", decision: "",
     context: "", rationale: "", optionsConsidered: "", decisionOwner: "",
-    workflowStep: "", otherLink: "",
+    workflowStep: "", otherLink: "", otherLinkLabel: "", notes: "", attachments: [],
   };
 }
 
@@ -479,6 +484,82 @@ function Field({ field, value, onChange, subjects }) {
   );
 }
 
+// Self-styled so it works inside both the decision-log and the home-modal CSS scopes.
+const PL_CSS = `
+.pl-editor{display:flex;flex-direction:column;gap:8px}
+.pl-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint)}
+.pl-row{display:flex;gap:8px;align-items:center}
+.pl-input{font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface,#fff);
+  border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+.pl-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.pl-label{flex:0 0 38%;min-width:0}
+.pl-url{flex:1;min-width:0}
+.pl-del{flex:0 0 auto;width:30px;height:30px;border-radius:7px;border:1px solid var(--line);
+  background:var(--surface,#fff);color:var(--ink-faint);cursor:pointer;font-size:12px}
+.pl-del:hover{background:#FBEBEA;color:var(--danger);border-color:#f0d4d0}
+.pl-add{align-self:flex-start;font-family:inherit;font-size:12px;font-weight:600;color:var(--ink-soft);
+  background:var(--surface,#fff);border:1px solid var(--line);border-radius:7px;padding:6px 10px;cursor:pointer}
+.pl-add:hover{border-color:#d8d4cc}
+`;
+
+export function ProjectLinksEditor({ links, onChange }) {
+  const list = links || [];
+  const set = (i, k, v) => onChange(list.map((l, idx) => (idx === i ? { ...l, [k]: v } : l)));
+  return (
+    <div className="pl-editor">
+      <style>{PL_CSS}</style>
+      <span className="pl-title">Project links</span>
+      {list.map((l, i) => (
+        <div className="pl-row" key={i}>
+          <input className="pl-input pl-label" placeholder="Label (e.g. Figma)" value={l.label || ""}
+            onChange={(e) => set(i, "label", e.target.value)} />
+          <input className="pl-input pl-url" placeholder="https://…" value={l.url || ""}
+            onChange={(e) => set(i, "url", e.target.value)} />
+          <button type="button" className="pl-del" title="Remove" onClick={() => onChange(list.filter((_, idx) => idx !== i))}>✕</button>
+        </div>
+      ))}
+      <button type="button" className="pl-add" onClick={() => onChange([...list, { label: "", url: "" }])}>+ Add link</button>
+    </div>
+  );
+}
+
+function Attachments({ items, onChange }) {
+  const inputRef = useRef(null);
+  function addFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    Promise.all(files.map((f) => new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ name: f.name, type: f.type, size: f.size, dataUrl: String(reader.result) });
+      reader.readAsDataURL(f);
+    }))).then((read) => onChange([...(items || []), ...read]));
+  }
+  return (
+    <div className="field">
+      <span className="field-label">Files &amp; images</span>
+      <div className="attach-drop" onClick={() => inputRef.current && inputRef.current.click()}>
+        <Upload size={15} /> <span>Click to upload images or files</span>
+      </div>
+      <input ref={inputRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.json"
+        style={{ display: "none" }} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+      {items && items.length > 0 && (
+        <div className="attach-grid">
+          {items.map((a, i) => (
+            <div className="attach-item" key={i}>
+              {a.type && a.type.startsWith("image/")
+                ? <img src={a.dataUrl} alt={a.name} className="attach-thumb" />
+                : <div className="attach-file"><FileJson size={18} /></div>}
+              <span className="attach-name" title={a.name}>{a.name}</span>
+              <button className="attach-x" title="Remove"
+                onClick={() => onChange(items.filter((_, idx) => idx !== i))}><X size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Main component                                                     */
 /* ------------------------------------------------------------------ */
@@ -697,6 +778,15 @@ export default function DecisionLog({
           )}
           <h1>{title}</h1>
           <p className="sub">{subtitle}</p>
+          {(log.projectLinks || []).length > 0 && (
+            <div className="proj-links">
+              {(log.projectLinks || []).map((pl, i) => (
+                <a key={i} className="link-pill" href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url}>
+                  {pl.label || pl.url}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
         <div className="topbar-actions">
           <button className="btn ghost" onClick={() => setSettingsOpen(true)}>
@@ -801,6 +891,12 @@ export default function DecisionLog({
                     : <span className="dim">—</span>}
                 </td>
                 <td className="dim"><div className="ellipsis" title={e.decisionOwner}>{e.decisionOwner || "—"}</div></td>
+                <td className="dim">
+                  {e.otherLink
+                    ? <a className="link-pill" href={e.otherLink} target="_blank" rel="noopener noreferrer"
+                        title={e.otherLink} onClick={(ev) => ev.stopPropagation()}>{e.otherLinkLabel || "Link"}</a>
+                    : <span className="dim">—</span>}
+                </td>
                 <td className="row-actions" onClick={(ev) => ev.stopPropagation()}>
                   <button className="icon-btn" title="Edit" onClick={() => openEdit(e)}><Pencil size={14} /></button>
                   <button className="icon-btn danger" title="Delete" onClick={() => deleteEntry(e.id)}><Trash2 size={14} /></button>
@@ -833,6 +929,10 @@ export default function DecisionLog({
               {FIELDS.map((f) => (
                 <Field key={f.key} field={f} value={drawer[f.key]} onChange={setDrawerField} subjects={subjects} />
               ))}
+              <Attachments
+                items={drawer.attachments || []}
+                onChange={(next) => setDrawerField("attachments", next)}
+              />
             </div>
             <div className="drawer-foot">
               {drawerMode === "edit" && (
@@ -998,6 +1098,7 @@ export default function DecisionLog({
                     placeholder={log.workflowView ? "Linked to the workflow capture page" : "https://… (optional)"}
                     onChange={(e) => setMeta("workflowLink", e.target.value)} />
                 </label>
+                <ProjectLinksEditor links={log.projectLinks} onChange={(next) => setMeta("projectLinks", next)} />
               </div>
               <div className="settings-grid">
                 <label className="field">
@@ -1137,6 +1238,32 @@ button.wf-link{border:none;border-bottom:1px solid var(--accent-soft);background
   font-size:13px;padding:0;cursor:pointer}
 .open-link{align-self:flex-start;font-size:11.5px;color:var(--accent);text-decoration:none;margin-top:1px}
 .open-link:hover{text-decoration:underline}
+
+/* link pills */
+.link-pill{display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  vertical-align:bottom;font-size:11.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);
+  padding:3px 9px;border-radius:11px;text-decoration:none;transition:background .12s}
+.link-pill:hover{background:#dde8e2}
+.proj-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+
+/* project links editor */
+.pl-row{display:flex;gap:8px;align-items:center}
+.pl-row .input:first-child{flex:0 0 38%}
+.pl-row .input:nth-child(2){flex:1}
+
+/* attachments */
+.attach-drop{display:flex;align-items:center;gap:8px;justify-content:center;border:1.5px dashed var(--line);
+  border-radius:9px;padding:14px;color:var(--ink-faint);font-size:12.5px;cursor:pointer;transition:.12s;background:#FCFBF9}
+.attach-drop:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-tint)}
+.attach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:8px}
+.attach-item{position:relative;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface);
+  display:flex;flex-direction:column}
+.attach-thumb{width:100%;height:64px;object-fit:cover;display:block}
+.attach-file{height:64px;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);background:var(--line-soft)}
+.attach-name{font-size:10.5px;color:var(--ink-soft);padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.attach-x{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;border:none;
+  background:rgba(28,27,25,.62);color:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.attach-x:hover{background:var(--danger)}
 .subj{display:inline-block;box-sizing:content-box;width:fit-content;max-width:100%;
   font-size:12px;background:var(--line-soft);color:var(--ink-soft);padding:3px 9px;border-radius:11px;
   line-height:1.4;white-space:normal;overflow-wrap:break-word}

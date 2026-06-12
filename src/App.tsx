@@ -1,5 +1,5 @@
 import { useState } from "react";
-import DecisionLog, { OUTFIT_ENTRIES } from "./DecisionLogApp";
+import DecisionLog, { OUTFIT_ENTRIES, ProjectLinksEditor } from "./DecisionLogApp";
 import { HACKWEEK_ENTRIES } from "./hackweekData";
 import WorkflowCapture from "./WorkflowCapture";
 
@@ -20,7 +20,8 @@ const INITIAL_LOGS = [
     workflowLink: "",
     workflowView: "outfit", // id of the workflow in the workflows registry
     settings: { prefix: "DOG", workflow: "GEN" },
-    entries: OUTFIT_ENTRIES,
+    projectLinks: [],
+    entries: OUTFIT_ENTRIES.map((e) => ({ ...e, otherLink: "", otherLinkLabel: "" })),
   },
   {
     id: "hackweek",
@@ -31,7 +32,8 @@ const INITIAL_LOGS = [
     workflowLink: "",
     workflowView: null,
     settings: { prefix: "HWK", workflow: "WDL" },
-    entries: HACKWEEK_ENTRIES.map((e) => ({ ...e, otherLink: HACKWEEK_LINK })),
+    projectLinks: [],
+    entries: HACKWEEK_ENTRIES.map((e) => ({ ...e, otherLink: HACKWEEK_LINK, otherLinkLabel: "FigJam" })),
   },
 ];
 
@@ -78,11 +80,15 @@ function CreateLogModal({ onClose, onCreate }) {
   const [product, setProduct] = useState("");
   const [feature, setFeature] = useState("");
   const [workflowLink, setWorkflowLink] = useState("");
+  const [projectLinks, setProjectLinks] = useState([]);
   const valid = owner.trim() && product.trim() && feature.trim();
 
   const submit = () => {
     if (!valid) return;
-    onCreate({ owner: owner.trim(), product: product.trim(), feature: feature.trim(), workflowLink: workflowLink.trim() });
+    onCreate({
+      owner: owner.trim(), product: product.trim(), feature: feature.trim(), workflowLink: workflowLink.trim(),
+      projectLinks: projectLinks.filter((l) => (l.label || "").trim() || (l.url || "").trim()),
+    });
   };
 
   return (
@@ -115,6 +121,7 @@ function CreateLogModal({ onClose, onCreate }) {
             <span className="hm-label">Link to workflow <em>(optional)</em></span>
             <input className="hm-input" value={workflowLink} onChange={(e) => setWorkflowLink(e.target.value)} placeholder="https://… (FigJam, Lucid, docs, etc.)" />
           </label>
+          <ProjectLinksEditor links={projectLinks} onChange={setProjectLinks} />
           <p className="hm-note">
             New IDs will start from <span className="mono">{code(product)}-{code(feature)}-001</span>.
             All of these are editable later in the log's Settings.
@@ -174,11 +181,62 @@ function LogsHome({ logs, onOpen, onCreate, onWorkflows }) {
   );
 }
 
+function CreateWorkflowModal({ onClose, onCreate }) {
+  const [name, setName] = useState("");
+  const [product, setProduct] = useState("");
+  const [owner, setOwner] = useState("");
+  const [projectLinks, setProjectLinks] = useState([]);
+  const valid = name.trim();
+  const submit = () => {
+    if (!valid) return;
+    onCreate({
+      name: name.trim(), product: product.trim(), owner: owner.trim(),
+      projectLinks: projectLinks.filter((l) => (l.label || "").trim() || (l.url || "").trim()),
+    });
+  };
+  return (
+    <>
+      <div className="home-scrim" onClick={onClose} />
+      <div className="home-modal" role="dialog" aria-modal="true">
+        <div className="home-modal-head">
+          <div>
+            <h2>New workflow</h2>
+            <p>Start a blank workflow capture.</p>
+          </div>
+          <button className="home-x" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div className="home-modal-body">
+          <label className="hm-field">
+            <span className="hm-label">Workflow name<i>*</i></span>
+            <input className="hm-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Returns & refunds intake" autoFocus />
+          </label>
+          <div className="hm-grid">
+            <label className="hm-field">
+              <span className="hm-label">Product</span>
+              <input className="hm-input" value={product} onChange={(e) => setProduct(e.target.value)} placeholder="e.g. Commerce" />
+            </label>
+            <label className="hm-field">
+              <span className="hm-label">Owner</span>
+              <input className="hm-input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="e.g. Priya N. (Ops)" />
+            </label>
+          </div>
+          <ProjectLinksEditor links={projectLinks} onChange={setProjectLinks} />
+        </div>
+        <div className="home-modal-foot">
+          <button className="hm-btn" onClick={onClose}>Cancel</button>
+          <button className="hm-btn primary" onClick={submit} disabled={!valid}>Create workflow</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Workflows home (searchable index)                                 */
 /* ------------------------------------------------------------------ */
 
 function WorkflowsHome({ workflows, onOpen, onCreate, onLogs }) {
+  const [creating, setCreating] = useState(false);
   const [q, setQ] = useState("");
   const needle = q.trim().toLowerCase();
   const rows = needle
@@ -194,7 +252,7 @@ function WorkflowsHome({ workflows, onOpen, onCreate, onLogs }) {
         </div>
         <div className="home-head-actions">
           <button className="hm-link" onClick={onLogs}>Decision logs →</button>
-          <button className="hm-btn primary lg" onClick={onCreate}>+ New workflow</button>
+          <button className="hm-btn primary lg" onClick={() => setCreating(true)}>+ New workflow</button>
         </div>
       </header>
       <div className="home-search-row">
@@ -223,6 +281,9 @@ function WorkflowsHome({ workflows, onOpen, onCreate, onLogs }) {
           </tbody>
         </table>
       </div>
+      {creating && (
+        <CreateWorkflowModal onClose={() => setCreating(false)} onCreate={(meta) => { setCreating(false); onCreate(meta); }} />
+      )}
     </div>
   );
 }
@@ -238,20 +299,24 @@ export default function App() {
 
   const updateLog = (id, updater) => setLogs((ls) => ls.map((l) => (l.id === id ? updater(l) : l)));
 
-  const createLog = ({ owner, product, feature, workflowLink }) => {
+  const createLog = ({ owner, product, feature, workflowLink, projectLinks }) => {
     const id = "log-" + Date.now();
     setLogs((ls) => [...ls, {
       id, title: feature, owner, product, feature,
       workflowLink: workflowLink || "", workflowView: null,
       settings: { prefix: code(product), workflow: code(feature) },
+      projectLinks: projectLinks || [],
       entries: [],
     }]);
     setRoute({ view: "log", id });
   };
 
-  const createWorkflow = () => {
+  const createWorkflow = ({ name, product, owner, projectLinks }) => {
     const id = "wf-" + Date.now();
-    setWorkflows((ws) => [...ws, { id, name: "Untitled workflow", product: "", owner: "", steps: 0, updated: TODAY }]);
+    setWorkflows((ws) => [...ws, {
+      id, name: name || "Untitled workflow", product: product || "", owner: owner || "",
+      steps: 0, updated: TODAY, projectLinks: projectLinks || [],
+    }]);
     setRoute({ view: "workflow", id });
   };
 
@@ -262,6 +327,7 @@ export default function App() {
       <WorkflowCapture
         key={route.id}
         initial={initial}
+        projectLinks={wf?.projectLinks || []}
         focusStep={route.focusStep}
         onWorkflowsHome={() => setRoute({ view: "workflows" })}
       />

@@ -373,6 +373,39 @@ function IconBtn({ children, onClick, title, danger }) {
   );
 }
 
+// ---------- Generic dropdown menu ----------
+function Menu({ label, items, primary, disabled }) {
+  const [open, setOpen] = useState(false);
+  const itemStyle = {
+    display: "block", width: "100%", textAlign: "left", border: "none",
+    background: "transparent", padding: "9px 14px", fontSize: 12.5, fontWeight: 600,
+    fontFamily: SANS, color: INK, cursor: "pointer",
+  };
+  return (
+    <div style={{ position: "relative" }}>
+      <Btn primary={primary} disabled={disabled} onClick={() => setOpen((v) => !v)}>{label}</Btn>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 95,
+            background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 10,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.14)", minWidth: 180, overflow: "hidden",
+          }}>
+            {items.map((it, i) => (
+              <button key={i} style={itemStyle} onClick={() => { setOpen(false); it.onClick(); }}
+                onMouseEnter={(e) => e.currentTarget.style.background = ACCENT_SOFT}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                {it.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ---------- Export dropdown ----------
 function ExportMenu({ disabled, onText, onExcel, onJSON }) {
   const [open, setOpen] = useState(false);
@@ -415,9 +448,11 @@ function ExportMenu({ disabled, onText, onExcel, onJSON }) {
 }
 
 // ---------- Decision card ----------
-function DecisionCard({ d, onChange, onDelete, anchorLabel, highlight }) {
+function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, onJumpAnchor, highlight }) {
   const set = (k, v) => onChange({ ...d, [k]: v });
-  const ss = STATUS_STYLE[d.status] || STATUS_STYLE["Proposed"];
+  const ss = statusStyle || STATUS_STYLE[d.status] || STATUS_STYLE["Proposed"];
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (highlight) setOpen(true); }, [highlight]);
   const labelStyle = {
     fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
     color: MUTED, fontFamily: SANS, marginBottom: 3, display: "block",
@@ -433,16 +468,27 @@ function DecisionCard({ d, onChange, onDelete, anchorLabel, highlight }) {
     <div id={`dec-${d.id}`} style={{
       background: CARD_BG, border: `1px solid ${highlight ? ACCENT : BORDER}`,
       boxShadow: highlight ? `0 0 0 3px ${ACCENT_SOFT}` : "0 1px 3px rgba(0,0,0,0.04)",
-      borderRadius: 14, padding: "16px 18px", transition: "all .3s",
+      borderRadius: 14, padding: open ? "16px 18px" : "12px 14px", transition: "all .3s",
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <Pill bg={ss.bg} fg={ss.fg}>{d.status || "Proposed"}</Pill>
+      {/* Collapsed header — click to expand. Pills: workflow step · anchor row · status */}
+      <div onClick={() => setOpen((o) => !o)} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", cursor: "pointer" }}>
         {d.workflowStep ? <Pill tone="accent">{d.workflowStep}</Pill> : null}
-        {anchorLabel ? <Pill tone="outline">⊙ {anchorLabel}</Pill> : null}
-        <span style={{ flex: 1 }} />
-        <IconBtn danger title="Delete decision" onClick={onDelete}>×</IconBtn>
+        {anchorRowLabel ? (
+          <Pill tone="outline" onClick={(e) => { e.stopPropagation(); onJumpAnchor && onJumpAnchor(); }}>⊙ {anchorRowLabel}</Pill>
+        ) : null}
+        <Pill bg={ss.bg} fg={ss.fg}>{d.status || "Proposed"}</Pill>
+        {!open && (
+          <span style={{ flex: 1, minWidth: 80, fontSize: 12.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {d.decision || "Untitled decision"}
+          </span>
+        )}
+        {open && <span style={{ flex: 1 }} />}
+        <span style={{ color: MUTED, fontSize: 11 }}>{open ? "▲" : "▼"}</span>
+        <IconBtn danger title="Delete decision" onClick={(e) => { e.stopPropagation && e.stopPropagation(); onDelete(); }}>×</IconBtn>
       </div>
 
+      {!open ? null : (
+      <div style={{ marginTop: 12 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px 14px", marginBottom: 12 }}>
         <div>
           <label style={labelStyle}>Date</label>
@@ -491,12 +537,14 @@ function DecisionCard({ d, onChange, onDelete, anchorLabel, highlight }) {
           <div style={areaWrap}><GrowBox small value={d.optionsConsidered} onChange={(v) => set("optionsConsidered", v)} /></div>
         </div>
       </div>
+      </div>
+      )}
     </div>
   );
 }
 
 // ---------- Main app ----------
-export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome }) {
+export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, projectLinks = [] }) {
   const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
   const [info, setInfo] = useState(init.info);
   const [columns, setColumns] = useState(init.columns);
@@ -512,6 +560,12 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome })
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const [focusCol, setFocusCol] = useState(null);
+  const [decQuery, setDecQuery] = useState("");
+  const [decStatus, setDecStatus] = useState("All");
+  const [decStep, setDecStep] = useState("All");
+  const [aiReview, setAiReview] = useState(null);
+  const [links, setLinks] = useState(projectLinks || []);
+  const [linkDraft, setLinkDraft] = useState(null); // { label, url } when the add-link modal is open
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -602,6 +656,14 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome })
     setTimeout(() => setHighlightId(null), 2200);
   };
 
+  // Scroll to the grid cell a decision is anchored to ("link to comment row").
+  const jumpToAnchor = (anchor) => {
+    if (!anchor) return;
+    setFocusCol(anchor.colId);
+    document.getElementById(`wfcell-${anchor.colId}-${anchor.rowKey}`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "center" });
+    setTimeout(() => setFocusCol(null), 2600);
+  };
+
   const anchorLabel = (d) => {
     if (!d.anchor) return null;
     const col = columns.find((c) => c.id === d.anchor.colId);
@@ -610,41 +672,104 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome })
     return `${col.name} · ${row.label}`;
   };
 
+  // Just the anchor's row label (e.g. "Pain points") for the reordered pill.
+  const anchorRowLabel = (d) => {
+    if (!d.anchor) return null;
+    const row = ROWS.find((r) => r.key === d.anchor.rowKey);
+    return row ? row.label : null;
+  };
+
+  // ----- Decision search + filters -----
+  const decView = decisions.filter((d) => {
+    if (decStatus !== "All" && d.status !== decStatus) return false;
+    if (decStep !== "All" && d.workflowStep !== decStep) return false;
+    if (decQuery.trim()) {
+      const q = decQuery.toLowerCase();
+      const hay = `${d.decision} ${d.subject} ${d.context} ${d.rationale} ${d.optionsConsidered} ${d.workflowStep} ${d.decisionOwner}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  const decSteps = Array.from(new Set(decisions.map((d) => d.workflowStep).filter(Boolean)));
+
   // ----- Decision exports -----
   const LOG_HEADERS = ["id", "date", "status", "subject", "decision", "context", "rationale", "optionsConsidered", "decisionOwner", "workflowStep", "otherLink"];
 
-  const exportDecJSON = () => {
-    download(`decision-log-${slug(info.workflow)}.json`, JSON.stringify(decisions.map(toLogEntry), null, 2));
-    flash(`${decisions.length} decision${decisions.length === 1 ? "" : "s"} exported as JSON`);
+  const exportDecJSON = (list = decisions) => {
+    download(`decision-log-${slug(info.workflow)}.json`, JSON.stringify(list.map(toLogEntry), null, 2));
+    flash(`${list.length} decision${list.length === 1 ? "" : "s"} exported as JSON`);
   };
 
-  const exportDecExcel = () => {
+  const exportDecExcel = (list = decisions) => {
     const rows = [LOG_HEADERS.join(",")].concat(
-      decisions.map((d) => { const e = toLogEntry(d); return LOG_HEADERS.map((h) => csvEscape(e[h])).join(","); })
+      list.map((d) => { const e = toLogEntry(d); return LOG_HEADERS.map((h) => csvEscape(e[h])).join(","); })
     );
     download(`decision-log-${slug(info.workflow)}.csv`, rows.join("\n"), "text/csv");
     flash("Exported as CSV (opens in Excel)");
   };
 
-  const exportDecText = () => {
-    const txt = decisions.map((d, i) => {
+  const exportDecText = (list = decisions) => {
+    const txt = list.map((d, i) => {
       const e = toLogEntry(d);
       return [
         `DECISION ${i + 1}`,
-        `Date: ${e.date}`,
-        `Status: ${e.status}`,
-        `Subject: ${e.subject}`,
-        `Decision owner: ${e.decisionOwner}`,
-        `Decision: ${e.decision}`,
-        `Context: ${e.context}`,
-        `Rationale: ${e.rationale}`,
+        `Date: ${e.date}`, `Status: ${e.status}`, `Subject: ${e.subject}`,
+        `Decision owner: ${e.decisionOwner}`, `Decision: ${e.decision}`,
+        `Context: ${e.context}`, `Rationale: ${e.rationale}`,
         `Options considered: ${e.optionsConsidered}`,
-        `Workflow step: ${e.workflowStep}`,
-        `Other link: ${e.otherLink}`,
+        `Workflow step: ${e.workflowStep}`, `Other link: ${e.otherLink}`,
       ].join("\n");
     }).join("\n\n" + "—".repeat(40) + "\n\n");
     download(`decision-log-${slug(info.workflow)}.txt`, txt, "text/plain");
     flash("Exported as text");
+  };
+
+  const runExport = (format, list) => {
+    if (format === "json") exportDecJSON(list);
+    else if (format === "excel") exportDecExcel(list);
+    else exportDecText(list);
+  };
+
+  // ----- Pre-export: offer to fill missing fields with AI -----
+  const FILLABLE = [["context", "Context"], ["rationale", "Rationale"], ["optionsConsidered", "Options considered"]];
+
+  const suggestFor = (d, field) => {
+    if (field === "context")
+      return `Came up while working through “${d.workflowStep || "the workflow"}”${d.subject ? ` — ${d.subject}` : ""}.`;
+    if (field === "rationale")
+      return `Chosen to move “${(d.decision || "this").slice(0, 80)}” forward; revisit if constraints change.`;
+    return `Alternatives weren't recorded at the time — worth revisiting later.`;
+  };
+
+  const requestExport = (format) => {
+    const items = [];
+    decisions.forEach((d) => {
+      if (!(d.decision || "").trim()) return;
+      FILLABLE.forEach(([field, label]) => {
+        if (!(d[field] || "").trim())
+          items.push({ decId: d.id, field, label, suggestion: suggestFor(d, field), action: "approve" });
+      });
+    });
+    if (items.length === 0) { runExport(format, decisions); return; }
+    setAiReview({ format, items });
+  };
+
+  const setReviewAction = (idx, action) =>
+    setAiReview((r) => ({ ...r, items: r.items.map((it, i) => (i === idx ? { ...it, action } : it)) }));
+
+  const confirmAiReview = () => {
+    const { format, items } = aiReview;
+    const approved = items.filter((it) => it.action === "approve");
+    const final = decisions.map((d) => {
+      const ups = approved.filter((a) => a.decId === d.id);
+      if (!ups.length) return d;
+      const nd = { ...d };
+      ups.forEach((a) => { nd[a.field] = a.suggestion; });
+      return nd;
+    });
+    if (approved.length) setDecisions(final);
+    setAiReview(null);
+    runExport(format, final);
   };
 
   // ----- AI pass-2 sweep: decisions found -----
@@ -741,6 +866,11 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome })
 
   const DESC_W = 230;
 
+  const selectStyle = {
+    fontFamily: SANS, fontSize: 13, color: INK, background: CARD_BG,
+    border: `1px solid ${BORDER}`, borderRadius: 9, padding: "8px 10px", outline: "none", cursor: "pointer",
+  };
+
   const crumbLink = {
     background: "none", border: "none", padding: 0, font: "inherit", fontFamily: SANS,
     fontSize: 12.5, color: ACCENT, cursor: "pointer", fontWeight: 600,
@@ -770,15 +900,23 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome })
           <p style={{ margin: "6px 0 0", fontSize: 13.5, color: MUTED, maxWidth: 560 }}>
             Capture the steps, the people, the exceptions — and where AI could fit — while the nuance is still in the room.
           </p>
+          {links.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+              {links.map((pl, i) => (
+                <a key={i} href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{
+                  fontSize: 11.5, fontWeight: 600, color: ACCENT, background: ACCENT_SOFT,
+                  padding: "3px 9px", borderRadius: 999, textDecoration: "none", fontFamily: SANS,
+                }}>{pl.label || pl.url}</a>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Btn onClick={() => fileRef.current?.click()}>Import JSON</Btn>
-          <Btn onClick={exportWorkflow}>Export JSON</Btn>
-          <Btn onClick={exportCSV}>Grid CSV</Btn>
-          <Btn primary onClick={() => setShowPreview(true)} disabled={pendingDecisions.length === 0}
-            title={pendingDecisions.length === 0 ? "No AI pass-2 cells filled yet" : ""}>
-            Decisions found{pendingDecisions.length > 0 ? ` (${pendingDecisions.length})` : ""}
-          </Btn>
+          <Menu label="Import / Export ▾" items={[
+            { label: "Import JSON", onClick: () => fileRef.current?.click() },
+            { label: "Export JSON", onClick: exportWorkflow },
+            { label: "Grid CSV", onClick: exportCSV },
+          ]} />
           <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
             onChange={(e) => { if (e.target.files?.[0]) importWorkflow(e.target.files[0]); e.target.value = ""; }} />
         </div>
@@ -790,9 +928,32 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome })
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
           {INFO_FIELDS.map((f) => (
             <div key={f.key}>
-              <label style={labelStyle}>{f.label}</label>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <label style={labelStyle}>{f.label}</label>
+                {f.key === "logLink" && (
+                  <button onClick={() => setLinkDraft({ label: "", url: "" })} style={{
+                    fontFamily: SANS, fontSize: 11, fontWeight: 600, color: ACCENT, background: "none",
+                    border: "none", cursor: "pointer", padding: 0, marginBottom: 3,
+                  }}>+ add links</button>
+                )}
+              </div>
               <input type={f.type || "text"} value={info[f.key] || ""} style={inputStyle}
                 onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
+              {f.key === "logLink" && links.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                  {links.map((pl, i) => (
+                    <span key={i} style={{
+                      display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
+                      color: ACCENT, background: ACCENT_SOFT, padding: "3px 6px 3px 9px", borderRadius: 999, fontFamily: SANS,
+                    }}>
+                      <a href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{ color: ACCENT, textDecoration: "none" }}>{pl.label || pl.url}</a>
+                      <button onClick={() => setLinks(links.filter((_, idx) => idx !== i))} title="Remove" style={{
+                        border: "none", background: "none", color: ACCENT, cursor: "pointer", fontSize: 12, lineHeight: 1, padding: 0,
+                      }}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -905,12 +1066,12 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome })
                     const marked = isBranch && subflows[col.id] && val.trim();
                     const attached = cellDecisions(col.id, row.key);
                     return (
-                      <td key={col.id} style={{
+                      <td key={col.id} id={`wfcell-${col.id}-${row.key}`} style={{
                         position: "relative",
                         borderBottom: ri < ROWS.length - 1 ? `1px solid ${BORDER}` : "none",
                         borderRight: ci < columns.length - 1 ? `1px solid ${BORDER}` : "none",
                         padding: "9px 26px 9px 12px", verticalAlign: "top",
-                        background: isAI ? "#F7FAF8" : "transparent", minWidth: 250,
+                        background: focusCol === col.id && isAI ? "#EAF3EE" : (isAI ? "#F7FAF8" : "transparent"), minWidth: 250,
                       }}>
                         <button onClick={() => logFromCell(col, row)}
                           title={`Log a decision on ${col.name} · ${row.label}`}
@@ -964,17 +1125,20 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome })
 
       {/* ---------- Decisions section ---------- */}
       <div style={{ marginTop: 30 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
           <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>Decisions</h2>
           <Pill tone="neutral">{decisions.length} logged</Pill>
           <span style={{ flex: 1 }} />
-          <Btn onClick={() => { newDecision({}); flash("Decision added"); }}>+ Add decision</Btn>
-          <ExportMenu
-            disabled={decisions.length === 0}
-            onText={exportDecText}
-            onExcel={exportDecExcel}
-            onJSON={exportDecJSON}
-          />
+          <Menu label="Export ▾" disabled={decisions.length === 0} items={[
+            { label: "Text (.txt)", onClick: () => requestExport("text") },
+            { label: "Excel (.csv)", onClick: () => requestExport("excel") },
+            { label: "JSON (.json)", onClick: () => requestExport("json") },
+          ]} />
+          <Btn onClick={() => setShowPreview(true)} disabled={pendingDecisions.length === 0}
+            title={pendingDecisions.length === 0 ? "No AI pass-2 cells filled yet" : ""}>
+            ✨ Decisions found{pendingDecisions.length > 0 ? ` (${pendingDecisions.length})` : ""}
+          </Btn>
+          <Btn primary onClick={() => { newDecision({}); flash("Decision added"); }}>+ Add decision</Btn>
         </div>
         <p style={{ fontSize: 12.5, color: MUTED, margin: "0 0 14px", maxWidth: 640 }}>
           Notes captured here travel to the Decision Log. Decisions pinned from a grid cell carry a <span style={{ fontWeight: 600 }}>⊙</span> tag back to their cell; JSON exports leave <span style={{ fontFamily: "ui-monospace, monospace" }}>id</span> blank so the log assigns it on import.
@@ -988,16 +1152,38 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome })
             No decisions yet. Use <span style={{ fontWeight: 600 }}>+ Add decision</span>, the <span style={{ fontWeight: 600 }}>✚</span> on any grid cell, or <span style={{ fontWeight: 600 }}>Decisions found</span> to pull in AI pass-2 calls.
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {[...decisions].reverse().map((d) => (
-              <DecisionCard key={d.id} d={d}
-                highlight={highlightId === d.id}
-                anchorLabel={anchorLabel(d)}
-                onChange={(nd) => setDecisions((p) => p.map((x) => (x.id === d.id ? nd : x)))}
-                onDelete={() => setDecisions((p) => p.filter((x) => x.id !== d.id))}
-              />
-            ))}
-          </div>
+          <>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+              <input value={decQuery} onChange={(e) => setDecQuery(e.target.value)} placeholder="Search decisions…"
+                style={{ flex: 1, minWidth: 180, fontFamily: SANS, fontSize: 13, color: INK, background: CARD_BG,
+                  border: `1px solid ${BORDER}`, borderRadius: 9, padding: "8px 11px", outline: "none" }} />
+              <select value={decStatus} onChange={(e) => setDecStatus(e.target.value)} style={selectStyle}>
+                <option>All</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
+              </select>
+              <select value={decStep} onChange={(e) => setDecStep(e.target.value)} style={selectStyle}>
+                <option>All</option>{decSteps.map((s) => <option key={s}>{s}</option>)}
+              </select>
+              <span style={{ fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{decView.length} of {decisions.length}</span>
+            </div>
+            {decView.length === 0 ? (
+              <div style={{ border: `1.5px dashed ${BORDER}`, borderRadius: 14, padding: "22px 20px", textAlign: "center", color: MUTED, fontSize: 13 }}>
+                No decisions match these filters.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {[...decView].reverse().map((d) => (
+                  <DecisionCard key={d.id} d={d}
+                    highlight={highlightId === d.id}
+                    statusStyle={STATUS_STYLE[d.status] || STATUS_STYLE["Proposed"]}
+                    anchorRowLabel={anchorRowLabel(d)}
+                    onJumpAnchor={() => jumpToAnchor(d.anchor)}
+                    onChange={(nd) => setDecisions((p) => p.map((x) => (x.id === d.id ? nd : x)))}
+                    onDelete={() => setDecisions((p) => p.filter((x) => x.id !== d.id))}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -1043,6 +1229,78 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome })
               <Btn onClick={() => setShowPreview(false)}>Done</Btn>
               <Btn primary disabled={remainingPass2.length === 0} onClick={addAllPass2}>
                 Add all ({remainingPass2.length})
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Add link modal ---------- */}
+      {linkDraft && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(43,42,39,0.45)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+          onClick={() => setLinkDraft(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: CARD_BG, borderRadius: 16, padding: "22px 24px", maxWidth: 460, width: "100%", boxShadow: "0 12px 40px rgba(0,0,0,0.25)" }}>
+            <h3 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: "0 0 14px", color: ACCENT }}>Add link</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={{ ...labelStyle, marginBottom: 4 }}>Label</label>
+                <input autoFocus value={linkDraft.label} placeholder="e.g. Figma, DevOps, Research"
+                  onChange={(e) => setLinkDraft((d) => ({ ...d, label: e.target.value }))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ ...labelStyle, marginBottom: 4 }}>URL</label>
+                <input value={linkDraft.url} placeholder="https://…"
+                  onChange={(e) => setLinkDraft((d) => ({ ...d, url: e.target.value }))} style={inputStyle} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18 }}>
+              <Btn onClick={() => setLinkDraft(null)}>Cancel</Btn>
+              <Btn primary disabled={!(linkDraft.label.trim() || linkDraft.url.trim())}
+                onClick={() => { setLinks((ls) => [...ls, { label: linkDraft.label.trim(), url: linkDraft.url.trim() }]); setLinkDraft(null); flash("Link added"); }}>
+                Add link
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- AI fill-in review (pre-export) ---------- */}
+      {aiReview && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(43,42,39,0.45)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+          onClick={() => setAiReview(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: CARD_BG, borderRadius: 16, padding: "22px 24px", maxWidth: 620, width: "100%", maxHeight: "82vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.25)" }}>
+            <h3 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 600, margin: "0 0 4px", color: ACCENT }}>✨ Populate missing fields before export?</h3>
+            <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px" }}>
+              {aiReview.items.length} field{aiReview.items.length === 1 ? "" : "s"} are empty. Review each AI-suggested draft and Approve, Deny, or Skip — only approved drafts are written before exporting.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+              {aiReview.items.map((it, i) => {
+                const dec = decisions.find((x) => x.id === it.decId);
+                return (
+                  <div key={i} style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700 }}>{it.label}</span> · {(dec?.decision || "decision").slice(0, 60)}
+                    </div>
+                    <p style={{ fontSize: 12.5, margin: "0 0 8px", lineHeight: 1.45, fontStyle: "italic", color: INK }}>“{it.suggestion}”</p>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {["approve", "deny", "skip"].map((a) => (
+                        <button key={a} onClick={() => setReviewAction(i, a)} style={{
+                          fontFamily: SANS, fontSize: 11.5, fontWeight: 600, textTransform: "capitalize",
+                          padding: "5px 11px", borderRadius: 7, cursor: "pointer",
+                          border: `1px solid ${it.action === a ? ACCENT : BORDER}`,
+                          background: it.action === a ? ACCENT_SOFT : CARD_BG,
+                          color: it.action === a ? ACCENT : MUTED,
+                        }}>{a}</button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn onClick={() => setAiReview(null)}>Cancel</Btn>
+              <Btn primary onClick={confirmAiReview}>
+                Export ({aiReview.items.filter((it) => it.action === "approve").length} approved)
               </Btn>
             </div>
           </div>
