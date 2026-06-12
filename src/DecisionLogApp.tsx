@@ -1045,9 +1045,6 @@ export default function DecisionLog({
               <button className="icon-btn" onClick={() => setDrawer(null)}><X size={18} /></button>
             </div>
             <div className="drawer-body">
-              <button className="btn ghost drawer-populate" onClick={populateDrawer}>
-                <Sparkles size={14} /> Populate missing fields
-              </button>
               {aiFilled.length > 0 && (
                 <div className="ai-filled-note">
                   <Sparkles size={13} /> Highlighted fields were AI-populated — review, then save to confirm.
@@ -1061,6 +1058,9 @@ export default function DecisionLog({
                 items={drawer.attachments || []}
                 onChange={(next) => setDrawerField("attachments", next)}
               />
+              <button className="btn ghost drawer-populate" onClick={populateDrawer}>
+                <Sparkles size={14} /> Populate missing fields
+              </button>
             </div>
             <div className="drawer-foot">
               {drawerMode === "edit" && (
