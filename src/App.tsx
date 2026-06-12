@@ -4,6 +4,11 @@ import { HACKWEEK_ENTRIES } from "./hackweekData";
 import WorkflowCapture from "./WorkflowCapture";
 
 const SUBTITLE = "A record of what was decided, and why.";
+const TODAY = new Date().toISOString().slice(0, 10);
+
+// Hack Week board — every Hackweek decision links here for now (editable per-decision later).
+const HACKWEEK_LINK =
+  "https://www.figma.com/board/16Hu89vaSw8O4XlpoCRbUX/Hack-Week-Q2-2026?node-id=124-6071&t=kPSX2s1kwxcyn94I-1";
 
 const INITIAL_LOGS = [
   {
@@ -12,8 +17,8 @@ const INITIAL_LOGS = [
     owner: "Lauren (DPM)",
     product: "Outfit App",
     feature: "Daily outfit generator",
-    workflowLink: "",        // external URL link (none — uses internal workflow page)
-    workflowView: "workflow", // internal workflow-capture page
+    workflowLink: "",
+    workflowView: "outfit", // id of the workflow in the workflows registry
     settings: { prefix: "DOG", workflow: "GEN" },
     entries: OUTFIT_ENTRIES,
   },
@@ -26,8 +31,19 @@ const INITIAL_LOGS = [
     workflowLink: "",
     workflowView: null,
     settings: { prefix: "HWK", workflow: "WDL" },
-    entries: HACKWEEK_ENTRIES,
+    entries: HACKWEEK_ENTRIES.map((e) => ({ ...e, otherLink: HACKWEEK_LINK })),
   },
+];
+
+// Workflows registry. "outfit" uses the built-in seed; the rest open blank (fictitious / new).
+const INITIAL_WORKFLOWS = [
+  { id: "outfit", name: "Daily outfit generator", product: "Outfit App", owner: "Lauren (DPM)", steps: 6, updated: "2026-06-11", seed: "outfit" },
+  { id: "wf-returns", name: "Returns & refunds intake", product: "Commerce", owner: "Priya N. (Ops)", steps: 7, updated: "2026-05-28" },
+  { id: "wf-onboard", name: "New hire onboarding", product: "People Ops", owner: "Marcus L. (HRBP)", steps: 9, updated: "2026-06-02" },
+  { id: "wf-invoice", name: "Invoice approval", product: "Finance", owner: "Dana K. (AP)", steps: 5, updated: "2026-05-19" },
+  { id: "wf-content", name: "Content publishing pipeline", product: "Marketing Site", owner: "Ivy R. (Content)", steps: 6, updated: "2026-06-05" },
+  { id: "wf-triage", name: "Support ticket triage", product: "Support", owner: "Sam O. (CX)", steps: 8, updated: "2026-05-30" },
+  { id: "wf-kyc", name: "KYC verification", product: "Banking", owner: "Leo M. (Risk)", steps: 10, updated: "2026-04-22" },
 ];
 
 function summarize(entries) {
@@ -39,6 +55,18 @@ function summarize(entries) {
 function code(s) {
   const letters = (s || "").match(/[A-Za-z]/g) || [];
   return letters.slice(0, 3).join("").toUpperCase() || "LOG";
+}
+
+// A blank workflow-capture initial state, seeded only with name/product/owner.
+function blankWorkflow(name, product, owner) {
+  return {
+    info: {
+      date: TODAY, product: product || "", workflow: name || "Untitled workflow",
+      deadline: "", smes: "", anchors: "", facilitator: "", scribe: owner || "", logLink: "",
+    },
+    columns: [{ id: "c0", name: "Trigger" }, { id: "c1", name: "Step 1" }],
+    cells: {}, subflows: {}, decisions: [],
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -54,12 +82,7 @@ function CreateLogModal({ onClose, onCreate }) {
 
   const submit = () => {
     if (!valid) return;
-    onCreate({
-      owner: owner.trim(),
-      product: product.trim(),
-      feature: feature.trim(),
-      workflowLink: workflowLink.trim(),
-    });
+    onCreate({ owner: owner.trim(), product: product.trim(), feature: feature.trim(), workflowLink: workflowLink.trim() });
   };
 
   return (
@@ -76,25 +99,21 @@ function CreateLogModal({ onClose, onCreate }) {
         <div className="home-modal-body">
           <label className="hm-field">
             <span className="hm-label">Decision log owner<i>*</i></span>
-            <input className="hm-input" value={owner} onChange={(e) => setOwner(e.target.value)}
-              placeholder="e.g. Lauren (DPM)" autoFocus />
+            <input className="hm-input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="e.g. Lauren (DPM)" autoFocus />
           </label>
           <div className="hm-grid">
             <label className="hm-field">
               <span className="hm-label">Product<i>*</i></span>
-              <input className="hm-input" value={product} onChange={(e) => setProduct(e.target.value)}
-                placeholder="e.g. Outfit App" />
+              <input className="hm-input" value={product} onChange={(e) => setProduct(e.target.value)} placeholder="e.g. Outfit App" />
             </label>
             <label className="hm-field">
               <span className="hm-label">Feature<i>*</i></span>
-              <input className="hm-input" value={feature} onChange={(e) => setFeature(e.target.value)}
-                placeholder="e.g. Daily outfit generator" />
+              <input className="hm-input" value={feature} onChange={(e) => setFeature(e.target.value)} placeholder="e.g. Daily outfit generator" />
             </label>
           </div>
           <label className="hm-field">
             <span className="hm-label">Link to workflow <em>(optional)</em></span>
-            <input className="hm-input" value={workflowLink} onChange={(e) => setWorkflowLink(e.target.value)}
-              placeholder="https://… (FigJam, Lucid, docs, etc.)" />
+            <input className="hm-input" value={workflowLink} onChange={(e) => setWorkflowLink(e.target.value)} placeholder="https://… (FigJam, Lucid, docs, etc.)" />
           </label>
           <p className="hm-note">
             New IDs will start from <span className="mono">{code(product)}-{code(feature)}-001</span>.
@@ -111,10 +130,10 @@ function CreateLogModal({ onClose, onCreate }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Home: table of decision logs                                      */
+/*  Decision Logs home                                                */
 /* ------------------------------------------------------------------ */
 
-function Home({ logs, onOpen, onCreate }) {
+function LogsHome({ logs, onOpen, onCreate, onWorkflows }) {
   const [creating, setCreating] = useState(false);
   return (
     <div className="home-root">
@@ -124,18 +143,15 @@ function Home({ logs, onOpen, onCreate }) {
           <h1>Decision Logs</h1>
           <p>Every decision log across the project — what was decided, and why.</p>
         </div>
-        <button className="hm-btn primary lg" onClick={() => setCreating(true)}>+ New decision log</button>
+        <div className="home-head-actions">
+          <button className="hm-link" onClick={onWorkflows}>Workflows →</button>
+          <button className="hm-btn primary lg" onClick={() => setCreating(true)}>+ New decision log</button>
+        </div>
       </header>
       <div className="home-table-wrap">
         <table className="home-tbl">
           <thead>
-            <tr>
-              <th>Decision log</th>
-              <th>Product</th>
-              <th>Owner</th>
-              <th className="num-h">Decisions</th>
-              <th>Updated</th>
-            </tr>
+            <tr><th>Decision log</th><th>Product</th><th>Owner</th><th className="num-h">Decisions</th><th>Updated</th></tr>
           </thead>
           <tbody>
             {logs.map((l) => {
@@ -153,67 +169,125 @@ function Home({ logs, onOpen, onCreate }) {
           </tbody>
         </table>
       </div>
-      {creating && (
-        <CreateLogModal
-          onClose={() => setCreating(false)}
-          onCreate={(meta) => { setCreating(false); onCreate(meta); }}
-        />
-      )}
+      {creating && <CreateLogModal onClose={() => setCreating(false)} onCreate={(meta) => { setCreating(false); onCreate(meta); }} />}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  App: routing + log state                                          */
+/*  Workflows home (searchable index)                                 */
+/* ------------------------------------------------------------------ */
+
+function WorkflowsHome({ workflows, onOpen, onCreate, onLogs }) {
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const rows = needle
+    ? workflows.filter((w) => `${w.name} ${w.product} ${w.owner}`.toLowerCase().includes(needle))
+    : workflows;
+  return (
+    <div className="home-root">
+      <style>{HOME_CSS}</style>
+      <header className="home-head">
+        <div>
+          <h1>Workflows</h1>
+          <p>Captured workflows — steps, people, exceptions, and where AI fits.</p>
+        </div>
+        <div className="home-head-actions">
+          <button className="hm-link" onClick={onLogs}>Decision logs →</button>
+          <button className="hm-btn primary lg" onClick={onCreate}>+ New workflow</button>
+        </div>
+      </header>
+      <div className="home-search-row">
+        <input className="home-search" value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder="Search workflows by name, product, or owner…" />
+        <span className="home-count">{rows.length} of {workflows.length}</span>
+      </div>
+      <div className="home-table-wrap">
+        <table className="home-tbl">
+          <thead>
+            <tr><th>Workflow</th><th>Product</th><th>Owner</th><th className="num-h">Steps</th><th>Updated</th></tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={5} className="home-empty">No workflows match “{q}”.</td></tr>
+            )}
+            {rows.map((w) => (
+              <tr key={w.id} onClick={() => onOpen(w.id)}>
+                <td className="home-name">{w.name}</td>
+                <td className="dim">{w.product || "—"}</td>
+                <td className="dim">{w.owner || "—"}</td>
+                <td className="num">{w.steps ?? "—"}</td>
+                <td className="dim">{w.updated || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  App: routing + state                                              */
 /* ------------------------------------------------------------------ */
 
 export default function App() {
   const [logs, setLogs] = useState(INITIAL_LOGS);
-  const [route, setRoute] = useState({ view: "home" });
+  const [workflows, setWorkflows] = useState(INITIAL_WORKFLOWS);
+  const [route, setRoute] = useState({ view: "logs" });
 
-  const updateLog = (id, updater) =>
-    setLogs((ls) => ls.map((l) => (l.id === id ? updater(l) : l)));
+  const updateLog = (id, updater) => setLogs((ls) => ls.map((l) => (l.id === id ? updater(l) : l)));
 
   const createLog = ({ owner, product, feature, workflowLink }) => {
     const id = "log-" + Date.now();
-    const newLog = {
+    setLogs((ls) => [...ls, {
       id, title: feature, owner, product, feature,
       workflowLink: workflowLink || "", workflowView: null,
       settings: { prefix: code(product), workflow: code(feature) },
       entries: [],
-    };
-    setLogs((ls) => [...ls, newLog]);
+    }]);
     setRoute({ view: "log", id });
   };
 
+  const createWorkflow = () => {
+    const id = "wf-" + Date.now();
+    setWorkflows((ws) => [...ws, { id, name: "Untitled workflow", product: "", owner: "", steps: 0, updated: TODAY }]);
+    setRoute({ view: "workflow", id });
+  };
+
   if (route.view === "workflow") {
-    const fromLog = logs.find((l) => l.id === route.fromLogId);
+    const wf = workflows.find((w) => w.id === route.id);
+    const initial = wf && wf.seed === "outfit" ? undefined : blankWorkflow(wf?.name, wf?.product, wf?.owner);
     return (
       <WorkflowCapture
-        onHome={() => setRoute({ view: "home" })}
-        onBackToLog={() => setRoute({ view: "log", id: route.fromLogId })}
-        backLogLabel={fromLog ? fromLog.title : "Decision log"}
+        key={route.id}
+        initial={initial}
         focusStep={route.focusStep}
+        onWorkflowsHome={() => setRoute({ view: "workflows" })}
       />
     );
   }
 
+  if (route.view === "workflows") {
+    return <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={() => setRoute({ view: "logs" })} />;
+  }
+
   if (route.view === "log") {
     const log = logs.find((l) => l.id === route.id);
-    if (!log) return <Home logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} />;
+    if (!log) return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} />;
     return (
       <DecisionLog
         key={log.id}
         log={log}
         subtitle={SUBTITLE}
         onChange={(updater) => updateLog(log.id, updater)}
-        onBack={() => setRoute({ view: "home" })}
-        onOpenWorkflow={(step) => setRoute({ view: "workflow", fromLogId: log.id, focusStep: step })}
+        onBack={() => setRoute({ view: "logs" })}
+        onOpenWorkflow={(step) => setRoute({ view: "workflow", id: log.workflowView, focusStep: step })}
       />
     );
   }
 
-  return <Home logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} />;
+  return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -236,8 +310,17 @@ const HOME_CSS = `
 .home-head h1{font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif;font-weight:600;
   letter-spacing:-.01em;margin:0;font-size:32px;line-height:1.1}
 .home-head p{margin:8px 0 0;color:var(--ink-soft);font-size:14px;max-width:54ch}
-.home-table-wrap{margin-top:28px;border:1px solid var(--line);border-radius:12px;overflow:hidden;
-  background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.02);max-width:900px}
+.home-head-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.hm-link{background:none;border:none;padding:0;font:inherit;font-size:13px;font-weight:600;
+  color:var(--accent);cursor:pointer}
+.hm-link:hover{text-decoration:underline}
+.home-search-row{display:flex;align-items:center;gap:12px;margin-top:24px;max-width:1000px}
+.home-search{flex:1;font-family:inherit;font-size:13.5px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:9px;padding:9px 12px}
+.home-search:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.home-count{font-size:12px;color:var(--ink-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
+.home-table-wrap{margin-top:16px;border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.02);max-width:1000px}
 .home-tbl{border-collapse:collapse;width:100%;font-size:14px}
 .home-tbl thead th{text-align:left;background:#FCFBF8;font-weight:600;font-size:10.5px;
   letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);
@@ -250,6 +333,7 @@ const HOME_CSS = `
 .home-name{font-weight:600;color:var(--ink);font-size:14.5px}
 .home-tbl .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-soft)}
 .home-tbl .dim{color:var(--ink-faint)}
+.home-empty{text-align:center;color:var(--ink-faint);font-style:italic;padding:32px 0}
 .mono{font-family:"SF Mono",ui-monospace,"JetBrains Mono",monospace}
 
 /* buttons */

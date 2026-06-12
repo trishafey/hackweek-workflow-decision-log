@@ -464,6 +464,7 @@ function Field({ field, value, onChange, subjects }) {
       </label>
     );
   }
+  const isUrl = typeof value === "string" && /^https?:\/\//i.test(value.trim());
   return (
     <label className="field">
       <FieldLabel label={field.label} desc={field.desc} />
@@ -471,6 +472,9 @@ function Field({ field, value, onChange, subjects }) {
         id={id} className="input" type={field.type === "date" ? "date" : "text"}
         value={value || ""} onChange={(e) => onChange(field.key, e.target.value)}
       />
+      {field.key === "otherLink" && isUrl && (
+        <a className="open-link" href={value.trim()} target="_blank" rel="noopener noreferrer">Open link ↗</a>
+      )}
     </label>
   );
 }
@@ -1131,6 +1135,8 @@ const CSS = `
 .wf-link:hover{border-bottom-color:var(--accent)}
 button.wf-link{border:none;border-bottom:1px solid var(--accent-soft);background:none;font:inherit;
   font-size:13px;padding:0;cursor:pointer}
+.open-link{align-self:flex-start;font-size:11.5px;color:var(--accent);text-decoration:none;margin-top:1px}
+.open-link:hover{text-decoration:underline}
 .subj{display:inline-block;box-sizing:content-box;width:fit-content;max-width:100%;
   font-size:12px;background:var(--line-soft);color:var(--ink-soft);padding:3px 9px;border-radius:11px;
   line-height:1.4;white-space:normal;overflow-wrap:break-word}

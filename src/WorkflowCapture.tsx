@@ -496,14 +496,17 @@ function DecisionCard({ d, onChange, onDelete, anchorLabel, highlight }) {
 }
 
 // ---------- Main app ----------
-export default function WorkflowCapture({ onHome, onBackToLog, backLogLabel, focusStep }) {
-  const [info, setInfo] = useState(seedInfo);
-  const [columns, setColumns] = useState(seedColumns);
-  const [cells, setCells] = useState(seedCells);
-  const [subflows, setSubflows] = useState(seedSubflows);
-  const [decisions, setDecisions] = useState(seedDecisions);
-  const [nextId, setNextId] = useState(6);
-  const decIdRef = useRef(20);
+export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome }) {
+  const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
+  const [info, setInfo] = useState(init.info);
+  const [columns, setColumns] = useState(init.columns);
+  const [cells, setCells] = useState(init.cells);
+  const [subflows, setSubflows] = useState(init.subflows);
+  const [decisions, setDecisions] = useState(init.decisions);
+  const [nextId, setNextId] = useState(() =>
+    init.columns.reduce((m, c) => Math.max(m, (parseInt(String(c.id).replace(/\D/g, ""), 10) || 0) + 1), 0));
+  const decIdRef = useRef(
+    init.decisions.reduce((m, x) => Math.max(m, (parseInt(String(x.id).replace(/\D/g, ""), 10) || 0) + 1), 1));
   const [showPreview, setShowPreview] = useState(false);
   const [showDesc, setShowDesc] = useState(false);
   const [toast, setToast] = useState(null);
@@ -746,12 +749,11 @@ export default function WorkflowCapture({ onHome, onBackToLog, backLogLabel, foc
   return (
     <div style={{ minHeight: "100vh", background: BASE_BG, color: INK, padding: "28px 28px 60px", fontFamily: SANS }}>
       {/* ---------- Breadcrumb ---------- */}
-      {(onHome || onBackToLog) && (
+      {onWorkflowsHome && (
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16, fontSize: 12.5, flexWrap: "wrap" }}>
-          {onHome && <button style={crumbLink} onClick={onHome}>Decision Logs</button>}
-          {onBackToLog && <><span style={{ color: MUTED }}>/</span><button style={crumbLink} onClick={onBackToLog}>{backLogLabel || "Decision log"}</button></>}
+          <button style={crumbLink} onClick={onWorkflowsHome}>← Workflows</button>
           <span style={{ color: MUTED }}>/</span>
-          <span style={{ color: MUTED }}>Workflow capture</span>
+          <span style={{ color: MUTED }}>{info.workflow || "Untitled workflow"}</span>
         </div>
       )}
       {/* ---------- Page header ---------- */}
