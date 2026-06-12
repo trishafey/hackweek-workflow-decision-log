@@ -231,6 +231,13 @@ const SEED_SUBJECTS = [
   "Wear tracker",
 ];
 
+// Default entries for the Daily outfit generator log (merges seed owners + subjects).
+export const OUTFIT_ENTRIES = SEED.map((e, i) => ({
+  ...e,
+  decisionOwner: SEED_OWNERS[i] || e.decisionOwner,
+  subject: SEED_SUBJECTS[i] || e.subject,
+}));
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -472,9 +479,15 @@ function Field({ field, value, onChange, subjects }) {
 /*  Main component                                                     */
 /* ------------------------------------------------------------------ */
 
-export default function DecisionLog() {
-  const [entries, setEntries] = useState(() => SEED.map((e, i) => ({ ...e, decisionOwner: SEED_OWNERS[i] || e.decisionOwner, subject: SEED_SUBJECTS[i] || e.subject })));
-  const [settings, setSettings] = useState({ prefix: "DOG", workflow: "GEN" });
+export default function DecisionLog({
+  title = "Decision Log",
+  subtitle = "A record of what was decided, and why.",
+  initialEntries,
+  initialSettings = { prefix: "DOG", workflow: "GEN" },
+  onBack,
+}) {
+  const [entries, setEntries] = useState(() => initialEntries ?? OUTFIT_ENTRIES);
+  const [settings, setSettings] = useState(initialSettings);
 
   const [statusFilter, setStatusFilter] = useState("All");
   const [subjectFilter, setSubjectFilter] = useState("All");
@@ -666,8 +679,15 @@ export default function DecisionLog() {
       {/* Header */}
       <header className="topbar">
         <div className="brand">
-          <h1>Decision Log</h1>
-          <p className="sub">A record of what was decided, and why — so it isn't re-litigated.</p>
+          {onBack && (
+            <nav className="crumbs" aria-label="Breadcrumb">
+              <button className="crumb-link" onClick={onBack}>Decision Logs</button>
+              <span className="crumb-sep">/</span>
+              <span className="crumb-current">{title}</span>
+            </nav>
+          )}
+          <h1>{title}</h1>
+          <p className="sub">{subtitle}</p>
         </div>
         <div className="topbar-actions">
           <button className="btn ghost" onClick={() => setSettingsOpen(true)}>
@@ -988,6 +1008,12 @@ const CSS = `
 .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:22px}
 .brand h1{font-size:30px;line-height:1.1}
 .brand .sub{margin:6px 0 0;color:var(--ink-soft);font-size:13.5px;max-width:46ch}
+.crumbs{display:flex;align-items:center;gap:7px;margin-bottom:9px;font-size:12.5px;flex-wrap:wrap}
+.crumb-link{background:none;border:none;padding:0;font:inherit;font-size:12.5px;color:var(--accent);
+  cursor:pointer;font-weight:600}
+.crumb-link:hover{text-decoration:underline}
+.crumb-sep{color:var(--ink-faint)}
+.crumb-current{color:var(--ink-faint)}
 .topbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .code-chip{font-family:"SF Mono",ui-monospace,"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.02em}
 
