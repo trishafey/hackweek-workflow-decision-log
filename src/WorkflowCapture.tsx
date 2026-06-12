@@ -902,13 +902,8 @@ export default function WorkflowCapture({ initial, focusStep, onWorkflowsHome, p
       {/* ---------- Page header ---------- */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 20 }}>
         <div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-            <Pill tone="accent">Workflow Capture</Pill>
-            <Pill tone="neutral">Companion · Decision Log</Pill>
-            {info.product ? <Pill tone="neutral">{info.product}</Pill> : null}
-          </div>
           <h1 style={{ fontFamily: SERIF, fontWeight: 500, fontSize: 34, lineHeight: 1.1, margin: 0, color: ACCENT, letterSpacing: "-0.01em" }}>
-            {info.workflow || "Untitled workflow"}
+            Workflow: {info.workflow || "Untitled workflow"}
           </h1>
           <p style={{ margin: "6px 0 0", fontSize: 13.5, color: MUTED, maxWidth: 560 }}>
             Capture the steps, the people, the exceptions — and where AI could fit — while the nuance is still in the room.

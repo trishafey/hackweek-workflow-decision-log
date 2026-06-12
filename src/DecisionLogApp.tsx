@@ -893,15 +893,6 @@ export default function DecisionLog({
           )}
           <h1>{title}</h1>
           <p className="sub">{subtitle}</p>
-          {(log.projectLinks || []).length > 0 && (
-            <div className="proj-links">
-              {(log.projectLinks || []).map((pl, i) => (
-                <a key={i} className="link-pill" href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url}>
-                  <Link2 size={11} />{pl.label || pl.url}
-                </a>
-              ))}
-            </div>
-          )}
         </div>
         <div className="topbar-actions">
           <button className="btn ghost" onClick={() => setSettingsOpen(true)}>
@@ -960,6 +951,24 @@ export default function DecisionLog({
           <span className="count">{view.length} of {entries.length}</span>
         </div>
       </div>
+
+      {/* Project links */}
+      {(log.projectLinks || []).length > 0 && (
+        <div className="proj-links">
+          {(log.projectLinks || []).map((pl, i) => {
+            const live = pl.url && pl.url !== "#";
+            return live ? (
+              <a key={i} className="link-pill" href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url}>
+                <Link2 size={11} />{pl.label || pl.url}
+              </a>
+            ) : (
+              <span key={i} className="link-pill link-pill-tbd" title="Link to be added">
+                <Link2 size={11} />{pl.label || "Link"}
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {/* Table */}
       <div className="table-wrap">
@@ -1430,7 +1439,9 @@ button.wf-link{border:none;border-bottom:1px solid var(--accent-soft);background
   padding:3px 9px;border-radius:11px;text-decoration:none;transition:background .12s}
 .link-pill:hover{background:#dde8e2}
 .link-pill svg{flex-shrink:0}
-.proj-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.link-pill-tbd{color:var(--ink-faint);background:var(--line-soft);cursor:default}
+.link-pill-tbd:hover{background:var(--line-soft)}
+.proj-links{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 18px}
 
 /* decisions search box */
 .dl-search{font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface);

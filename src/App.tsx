@@ -20,7 +20,11 @@ const INITIAL_LOGS = [
     workflowLink: "",
     workflowView: "outfit", // id of the workflow in the workflows registry
     settings: { prefix: "DOG", workflow: "GEN" },
-    projectLinks: [],
+    projectLinks: [
+      { label: "Workflow", url: "https://trishafey.github.io/hackweek-workflow-decision-log/#/workflow/outfit" },
+      { label: "Prototype (TBD)", url: "" },
+      { label: "Figma", url: "https://www.figma.com/file/9Kp2QoutfitGEN/Outfit-App-Designs" },
+    ],
     entries: OUTFIT_ENTRIES.map((e) => ({ ...e, otherLink: "", otherLinkLabel: "" })),
   },
   {
