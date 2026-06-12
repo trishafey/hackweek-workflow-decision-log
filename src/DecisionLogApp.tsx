@@ -480,14 +480,19 @@ function Field({ field, value, onChange, subjects }) {
 /* ------------------------------------------------------------------ */
 
 export default function DecisionLog({
-  title = "Decision Log",
+  log,
+  onChange,
   subtitle = "A record of what was decided, and why.",
-  initialEntries,
-  initialSettings = { prefix: "DOG", workflow: "GEN" },
   onBack,
+  onOpenWorkflow,
 }) {
-  const [entries, setEntries] = useState(() => initialEntries ?? OUTFIT_ENTRIES);
-  const [settings, setSettings] = useState(initialSettings);
+  // Controlled by the parent App so created logs and edits persist across navigation.
+  const title = log.title;
+  const entries = log.entries;
+  const settings = log.settings;
+  const setEntries = (u) => onChange((p) => ({ ...p, entries: typeof u === "function" ? u(p.entries) : u }));
+  const setSettings = (u) => onChange((p) => ({ ...p, settings: typeof u === "function" ? u(p.settings) : u }));
+  const setMeta = (k, v) => onChange((p) => ({ ...p, [k]: v }));
 
   const [statusFilter, setStatusFilter] = useState("All");
   const [subjectFilter, setSubjectFilter] = useState("All");
@@ -782,10 +787,13 @@ export default function DecisionLog({
                 <td><div className="clamp" title={e.rationale}>{e.rationale || <span className="dim">—</span>}</div></td>
                 <td className="dim">
                   {e.workflowStep
-                    ? (e.otherLink
-                        ? <a className="wf-link" href={e.otherLink} target="_blank" rel="noopener noreferrer"
-                            title={`${e.workflowStep} → ${e.otherLink}`} onClick={(ev) => ev.stopPropagation()}>{e.workflowStep}</a>
-                        : <div className="ellipsis" title={e.workflowStep}>{e.workflowStep}</div>)
+                    ? (log.workflowView && onOpenWorkflow
+                        ? <button className="wf-link wf-btn" title={`Open workflow: ${e.workflowStep}`}
+                            onClick={(ev) => { ev.stopPropagation(); onOpenWorkflow(e.workflowStep); }}>{e.workflowStep}</button>
+                        : (log.workflowLink
+                            ? <a className="wf-link" href={log.workflowLink} target="_blank" rel="noopener noreferrer"
+                                title={`${e.workflowStep} → ${log.workflowLink}`} onClick={(ev) => ev.stopPropagation()}>{e.workflowStep}</a>
+                            : <div className="ellipsis" title={e.workflowStep}>{e.workflowStep}</div>))
                     : <span className="dim">—</span>}
                 </td>
                 <td className="dim"><div className="ellipsis" title={e.decisionOwner}>{e.decisionOwner || "—"}</div></td>
@@ -953,10 +961,40 @@ export default function DecisionLog({
           <div className="scrim" onClick={() => setSettingsOpen(false)} />
           <div className="modal settings-modal">
             <div className="modal-head">
-              <div className="modal-title"><div><h2>Settings</h2><p>These drive how new IDs are generated.</p></div></div>
+              <div className="modal-title"><div><h2>Settings</h2><p>Log details, and the codes that drive new IDs.</p></div></div>
               <button className="icon-btn" onClick={() => setSettingsOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body">
+              <div className="settings-fields">
+                <label className="field">
+                  <span className="field-label">Decision log title</span>
+                  <input className="input" value={title}
+                    onChange={(e) => setMeta("title", e.target.value)} />
+                </label>
+                <label className="field">
+                  <span className="field-label">Decision log owner</span>
+                  <input className="input" value={log.owner || ""}
+                    onChange={(e) => setMeta("owner", e.target.value)} />
+                </label>
+                <div className="settings-grid">
+                  <label className="field">
+                    <span className="field-label">Product</span>
+                    <input className="input" value={log.product || ""}
+                      onChange={(e) => setMeta("product", e.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Feature</span>
+                    <input className="input" value={log.feature || ""}
+                      onChange={(e) => setMeta("feature", e.target.value)} />
+                  </label>
+                </div>
+                <label className="field">
+                  <span className="field-label">Link to workflow</span>
+                  <input className="input" value={log.workflowLink || ""}
+                    placeholder={log.workflowView ? "Linked to the workflow capture page" : "https://… (optional)"}
+                    onChange={(e) => setMeta("workflowLink", e.target.value)} />
+                </label>
+              </div>
               <div className="settings-grid">
                 <label className="field">
                   <span className="field-label">Project prefix</span>
@@ -1091,6 +1129,8 @@ const CSS = `
 .wf-link{display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   vertical-align:bottom;color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft);transition:border-color .12s}
 .wf-link:hover{border-bottom-color:var(--accent)}
+button.wf-link{border:none;border-bottom:1px solid var(--accent-soft);background:none;font:inherit;
+  font-size:13px;padding:0;cursor:pointer}
 .subj{display:inline-block;box-sizing:content-box;width:fit-content;max-width:100%;
   font-size:12px;background:var(--line-soft);color:var(--ink-soft);padding:3px 9px;border-radius:11px;
   line-height:1.4;white-space:normal;overflow-wrap:break-word}
@@ -1181,6 +1221,8 @@ select.input.mini{padding-right:26px}
 .all-clear{display:flex;align-items:center;gap:8px;color:var(--accent);font-size:13.5px;padding:24px;justify-content:center}
 
 /* settings */
+.settings-fields{display:flex;flex-direction:column;gap:13px;margin-bottom:14px;
+  padding-bottom:16px;border-bottom:1px solid var(--line-soft)}
 .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .id-preview{margin-top:16px;font-size:13px;color:var(--ink-soft);background:var(--accent-tint);
   border:1px solid var(--accent-soft);border-radius:9px;padding:11px 13px;display:flex;align-items:center}

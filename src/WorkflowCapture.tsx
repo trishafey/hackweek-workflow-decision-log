@@ -1,0 +1,1060 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+
+// ---------- Theme ----------
+const ACCENT = "#1F3A34";
+const ACCENT_SOFT = "#E8EEEC";
+const BASE_BG = "#FAF9F7";
+const CARD_BG = "#FFFFFF";
+const BORDER = "#E5E1DA";
+const INK = "#2B2A27";
+const MUTED = "#8A857C";
+const SERIF = "'Newsreader', Georgia, 'Times New Roman', serif";
+const SANS = "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif";
+
+// ---------- Decision log statuses ----------
+const STATUSES = ["Proposed", "Under review", "Prioritized", "Active", "Future state", "Rejected", "Descoped", "Deprecated"];
+const STATUS_STYLE = {
+  "Proposed":     { bg: "#F1EFEA", fg: "#6B665D" },
+  "Under review": { bg: "#F6EFDC", fg: "#8A6A1F" },
+  "Prioritized":  { bg: "#E4ECF2", fg: "#33586E" },
+  "Active":       { bg: ACCENT_SOFT, fg: ACCENT },
+  "Future state": { bg: "#EAF2E6", fg: "#4A6B3A" },
+  "Rejected":     { bg: "#F4E5E1", fg: "#9C3D2E" },
+  "Descoped":     { bg: "#EFE9F0", fg: "#6A5378" },
+  "Deprecated":   { bg: "#ECEAE6", fg: "#85807A" },
+};
+
+// ---------- Row definitions ----------
+const ROWS = [
+  { key: "step", label: "Step / action", tip: "What happens here?" },
+  { key: "actor", label: "Actor", tip: "Who is doing this step/action (role / name)" },
+  { key: "costars", label: "Co-stars (other humans)", tip: "Who else is involved at this point i.e. vendor, client, TM etc" },
+  { key: "system", label: "System / platform", tip: "Which tool or system — or '—' if it's manual" },
+  { key: "context", label: "Context / input", tip: "What data is needed to complete the step" },
+  { key: "branches", label: "Branches / sub-flows", tip: "Operational decision the actor makes here → name it and link to its own table. This is workflow, not a log entry. These are required workflows to the product." },
+  { key: "impact", label: "Impact (effect of this step)", tip: "Impact of decision" },
+  { key: "exceptions", label: "Exceptions", tip: "The path of the workflow broke. Worst case outcomes." },
+  { key: "pain", label: "Pain points", tip: "The path didn't break, but it's causing friction (delay, annoyance, lengthy process, etc.)" },
+  { key: "notes", label: "Opportunities / notes", tip: "Ideas for mitigating or solving for exceptions/pain points or future state ideas." },
+  { key: "aiPass1", label: "AI — pass 1 (possibilities)", tip: "Pie-in-the-sky: every AI idea for this step, unfiltered. Not decisions yet. No idea is a bad idea." },
+  { key: "aiPass2", label: "AI — pass 2 (scoped call + log ID)", tip: "The team's decision: in scope now / later / no, the call (automate / augment / assist / leave alone), the human checkpoint, and the log ID." },
+];
+
+// ---------- Info fields ----------
+const INFO_FIELDS = [
+  { key: "date", label: "Date", type: "date" },
+  { key: "product", label: "Product / feature" },
+  { key: "workflow", label: "Workflow" },
+  { key: "deadline", label: "Deadline / timespan" },
+  { key: "smes", label: "SME(s)" },
+  { key: "anchors", label: "System anchors" },
+  { key: "facilitator", label: "Facilitator" },
+  { key: "scribe", label: "Scribe / decision-log owner" },
+  { key: "logLink", label: "Decision log link" },
+];
+
+// ---------- Seed data: Daily outfit generator — live session capture ----------
+const seedColumns = [
+  { id: "c0", name: "Trigger" },
+  { id: "c1", name: "Step 1: Styling brief" },
+  { id: "c2", name: "Step 2: Generate the looks" },
+  { id: "c3", name: "Step 3: Review" },
+  { id: "c4", name: "Step 4: Select outfit" },
+  { id: "c5", name: "Step 5: Confirmation" },
+];
+
+const seedCells = {
+  c0: {
+    step: "User opens the app to get an outfit ('what should I wear?')",
+    actor: "User",
+    costars: "—",
+    system: "App & calendar & weather",
+    context: "Date, calendar event, weather",
+    branches: "—",
+    impact: "Enter styling workflow",
+    exceptions: "Haven't onboarded",
+    pain: "—",
+    notes: "If calendar linked and event exists",
+    aiPass1: "• Detect today's occasion from the calendar and greet with a ready-made suggestion - or special event like birthday\n• Dynamic morning push about weather change i.e. 73 and raining\n• Learn when user enters app most i.e. 7am for work\n• Contextual awareness for location/travel. I.e. tropical, or Paris, or modest\n• Wearable for detecting body temp or health to adjust clothing",
+    aiPass2: "• (Prioritized) Detect today's occasion from the calendar and greet with a ready-made suggestion - or special event like birthday\n• (Prioritized) Dynamic morning push about weather change i.e. 73 and raining\n• (Future state) Contextual awareness for location/travel. I.e. tropical, or Paris, or modest (tracking geolocation)",
+  },
+  c1: {
+    step: "App prompts user for information about occasion/vibe",
+    actor: "User",
+    costars: "—",
+    system: "App",
+    context: "Occasion, look/vibe, additional information to set context and what look they are going for",
+    branches: "Quick generate",
+    impact: "Informs the app with styling brief so it can generate outfit choices",
+    exceptions: "• App doesn't recognize free-text input\n• Input too vague/unclear",
+    pain: "User doesn't know what they want to wear or what they are going for",
+    notes: "Quick generate flow / prompts",
+    aiPass1: "• Photo input as a brief\n• Link to Inspo or celebrity look\n• Smart defaults from history\n• Adjusting pills to things you might have filled in the past\n• Learning your style with each brief\n• Voice note brief \"tell me about your day\" or similar\n• Detecting multiple occasions and creating a transitional look or 2 outfits for the day\n• Searches dress code of event/restaurant and if there is something like theme\n• Vibe match to Spotify playlist\n• Conversational follow up question clarification\n• User wants to wear an item of clothing but doesn't know what to match with",
+    aiPass2: "• (Prioritized) User wants to wear an item of clothing but doesn't know what to match with — plan an outfit around a specific item\n• (Prioritized) Conversational follow up question clarification\n• (Future state) Voice note brief \"tell me about your day\" or similar",
+  },
+  c2: {
+    step: "App generates the looks (top, bottom, shoes, accessories) from closet",
+    actor: "App",
+    costars: "—",
+    system: "App",
+    context: "Weather, closet inventory, user's styling brief",
+    branches: "Not enough closet inventory, suggest alternatives",
+    impact: "App provides 3 outfit options",
+    exceptions: "Not enough closet inventory",
+    pain: "Takes too long to generate, errors while generating",
+    notes: "Purchase suggestions (branch/subflow)",
+    aiPass1: "• Look up smart suggestions for additional pieces to wardrobe\n• Weather-aware generation (layering for cold, low or high chance raining, breathable for heat) accessory: umbrella\n• Amount of walking to and from or at location (shoes)\n• Learning preferences of common \"vibes\" i.e. comfy, fashionable, bold, casual etc. and suggesting one for each category\n• Looking up current or emerging trends. Classic or trendy?\n• Explain the outfit: the blazer keeps it polished, sneaker say you're not trying to hard.\n• Confidence score \"92% match to your style\"\n• User preference for goals: app can suggest under worn pieces. Be more fashionable. Try new things. Create a capsule wardrobe. etc\n• \"Pack friendly\" context aware for work trip: pick less pieces that work together\n• Tips or suggestions for hair, makeup (can be turned off in preferences), accessories",
+    aiPass2: "• (Prioritized) Explain the outfit: the blazer keeps it polished, sneaker say you're not trying to hard.\n• (Prioritized) Weather-aware generation (layering for cold, low or high chance raining, breathable for heat) accessory: umbrella\n• (Future state) Looking up current or emerging trends. Classic or trendy?\n• (Future state) Look up smart suggestions for additional pieces to wardrobe",
+  },
+  c3: {
+    step: "User reviews 3 outfit options",
+    actor: "User",
+    costars: "—",
+    system: "App",
+    context: "Outfits generated by app, weather, user's styling brief",
+    branches: "User doesn't like selection:\n• Swap pieces\n• Regenerate\n• Update styling brief",
+    impact: "User makes a judgment call on outfit options",
+    exceptions: "• AI hallucination\n• Weather API or other dependencies are unavailable",
+    pain: "• User doesn't like options provided\n• Option(s) don't fit the users' style\n• They keep seeing the same options",
+    notes: "• Not reusing same outfit in same week or preset time.\n• Favorite/save for later\n• Note a recently used outfit may be in the laundry.\n• Remove from closet\n• Learning from user preferences. rating/comments",
+    aiPass1: "• Smart swapping single items. and learns from every swap. or \"more like this\"\n• Smart suggest additional pieces for wardrobe to purchase\n• Learning from user preferences. rating/comments\n• Natural language to fine tune selections (warmer, more casual, more colour)\n• \"Not my vibe\" button with follow up question \"why not\" & \"I love this\" \"favorite\"\n• Share a style look book, maybe a theme for a party, or a group vacation, or a night out.\n• Generate outfit on your body to preview with AI (can share measurements or photo of yourself in preferences or default to a general generation on mannequin/avatar)",
+    aiPass2: "• (Prioritized) \"Not my vibe\" button with follow up question \"why not\" & \"I love this\" \"favorite\"\n• (Prioritized) Natural language to fine tune selections (warmer, more casual, more colour)\n• (Prioritized) Smart swapping single items. and learns from every swap. or \"more like this\"\n• (Future state) Generate outfit on your body to preview with AI (mannequin/avatar)",
+  },
+  c4: {
+    step: "User makes a selection from the 3 provided",
+    actor: "User",
+    costars: "App",
+    system: "App",
+    context: "User's selection",
+    branches: "App logs outfit for calendar date\n\nUser tried to find/tried on outfit:\n• Swap pieces\n• Regenerate\n• Update styling brief",
+    impact: "• User has an outfit!\n• App learns from confirmation",
+    exceptions: "AI fails to learn from this properly",
+    pain: "• User selected it but something didn't work with the outfit\n• User wants to change or edit after selection",
+    notes: "• Suggest cleaning out closet for unworn items\n• Planning tomorrows outfits? Or for the week?",
+    aiPass1: "• Learning your style with each brief\n• Generate outfit on your body to preview with AI (can share measurements or photo of yourself in preferences or default to a general generation on mannequin/avatar)\n• Share a style look book, maybe a theme for a party, or a group vacation, or a night out.\n• Calendar aware \"you work this week\" or \"you already wore this on 3 vacations\" \"you wore this to 3 client meetings\" try something new! (adjust in preferences?)",
+    aiPass2: "• (Prioritized) Calendar aware \"you work this week\" or \"you already wore this on 3 vacations\" \"you wore this to 3 client meetings\" try something new! (adjust in preferences?)\n• (Future state) Share a style look book, maybe a theme for a party, or a group vacation, or a night out.",
+  },
+  c5: {
+    step: "User confirms the outfit worked for them",
+    actor: "User",
+    costars: "App",
+    system: "App",
+    context: "User's confirmation",
+    branches: "• Regenerate",
+    impact: "• App learns from confirmation",
+    exceptions: "• AI fails to learn from this properly\n• User doesn't confirm",
+    pain: "—",
+    notes: "• Prompt rating / confirmation if user leaves flow before completing this step\n• Share with friend & ask for feedback or for coordination\n• Add to look book",
+    aiPass1: "• Learning your style with each confirmation or \"didn't work try something new\" with follow up questions like \"why didn't this work\" or \"how confident did you feel\" or rating\n• Generate outfit on your body to preview with AI (can share measurements or photo of yourself in preferences or default to a general generation on mannequin/avatar)\n• Add to style look book, maybe a theme for a party, or a group vacation, or a night out. Tracks your preferences\n• Upload picture of you in this outfit for better generation in the future\n• Tracker for how many times you wore the outfit or pieces\n• \"Girl math\" \"you wore these $200 jeans 20 times so it was really $10\" :)\n• Declutter: auto suggest unworn items that go unselected\n• Most worn/least worn catalogue",
+    aiPass2: "• (Prioritized) Learning your style with each confirmation or \"didn't work try something new\" with follow up questions like \"why didn't this work\" or \"how confident did you feel\" or rating\n• (Future state) Declutter: auto suggest unworn items that go unselected\n• (Future state) Tracker for how many times you wore the outfit or pieces",
+  },
+};
+
+const seedInfo = {
+  date: "2026-06-11",
+  product: "Outfit App",
+  workflow: "Daily outfit generator",
+  deadline: "Q3 design sprint",
+  smes: "Trish (Client Specialist)",
+  anchors: "Shokoh (System Architect)",
+  facilitator: "Jenevine (UX)",
+  scribe: "Lauren (DPM)",
+  logLink: "decision-log://outfit-gen",
+};
+
+const seedSubflows = { c1: true, c2: true };
+
+const D = "2026-06-11";
+const OWNER = "Fejdasz, Trish";
+const LINK = "decision-log://outfit-gen";
+
+const seedDecisions = [
+  // ----- Trigger -----
+  { id: "d1", date: D, status: "Prioritized", subject: "Calendar occasion detection",
+    decision: "Detect today's occasion from the calendar and greet with a ready-made suggestion - or special event like birthday",
+    context: "", rationale: "", optionsConsidered: "", decisionOwner: "",
+    workflowStep: "Trigger", otherLink: LINK, anchor: { colId: "c0", rowKey: "aiPass2" } },
+  { id: "d2", date: D, status: "Prioritized", subject: "Morning weather push",
+    decision: "Dynamic morning push about weather change i.e. 73 and raining",
+    context: "", rationale: "", optionsConsidered: "", decisionOwner: "",
+    workflowStep: "Trigger", otherLink: LINK, anchor: { colId: "c0", rowKey: "aiPass2" } },
+  { id: "d3", date: D, status: "Future state", subject: "Location/travel awareness",
+    decision: "Contextual awareness for location/travel. I.e. tropical, or Paris, or modest (tracking geolocation)",
+    context: "", rationale: "", optionsConsidered: "", decisionOwner: "",
+    workflowStep: "Trigger", otherLink: LINK, anchor: { colId: "c0", rowKey: "aiPass2" } },
+  // ----- Step 1: Styling brief -----
+  { id: "d4", date: D, status: "Prioritized", subject: "Plan around a specific item",
+    decision: "User wants to wear an item of clothing but doesn't know what to match with",
+    context: "", rationale: "Being able to plan an outfit around a specific item like buying a new pair of pants and excited to wear",
+    optionsConsidered: "", decisionOwner: "",
+    workflowStep: "Step 1: Styling brief", otherLink: LINK, anchor: { colId: "c1", rowKey: "aiPass2" } },
+  { id: "d5", date: D, status: "Prioritized", subject: "Conversational clarification",
+    decision: "Conversational follow up question clarification",
+    context: "", rationale: "Adding context and details for AI. Helps match a vibe that you want to go with. Adds clarity and direction and learns your style more.",
+    optionsConsidered: "", decisionOwner: "",
+    workflowStep: "Step 1: Styling brief", otherLink: LINK, anchor: { colId: "c1", rowKey: "aiPass2" } },
+  { id: "d6", date: D, status: "Future state", subject: "Voice note brief",
+    decision: "Voice note brief \"tell me about your day\" or similar",
+    context: "", rationale: "Accessibility. Easier than typing, easier to explain what you want. Natural language. Hands free. Variety of input.",
+    optionsConsidered: "", decisionOwner: "",
+    workflowStep: "Step 1: Styling brief", otherLink: LINK, anchor: { colId: "c1", rowKey: "aiPass2" } },
+  // ----- Step 2: Generate the looks -----
+  { id: "d7", date: D, status: "Prioritized", subject: "Explain the outfit",
+    decision: "Explain the outfit: the blazer keeps it polished, sneaker say you're not trying to hard.",
+    context: "", rationale: "Helps users understand outfit choices, esp if not fashion savvy or want to learn about fashion. Adds context. Building trust.",
+    optionsConsidered: "", decisionOwner: OWNER,
+    workflowStep: "Step 2: Generate the looks", otherLink: LINK, anchor: { colId: "c2", rowKey: "aiPass2" } },
+  { id: "d8", date: D, status: "Prioritized", subject: "Weather-aware generation",
+    decision: "Weather-aware generation (layering for cold, low or high chance raining, breathable for heat) accessory: umbrella",
+    context: "", rationale: "Weather is important for deciding outfits because temp and conditions affect what clothing and accessories are appropriate.",
+    optionsConsidered: "", decisionOwner: OWNER,
+    workflowStep: "Step 2: Generate the looks", otherLink: LINK, anchor: { colId: "c2", rowKey: "aiPass2" } },
+  { id: "d9", date: D, status: "Future state", subject: "Trend lookup",
+    decision: "Looking up current or emerging trends. Classic or trendy?",
+    context: "", rationale: "Keeping current if user wants to try new trends or stay classic. Helps with personalization of experience and saves time from looking up trends.",
+    optionsConsidered: "", decisionOwner: OWNER,
+    workflowStep: "Step 2: Generate the looks", otherLink: LINK, anchor: { colId: "c2", rowKey: "aiPass2" } },
+  { id: "d10", date: D, status: "Future state", subject: "Wardrobe purchase suggestions",
+    decision: "Look up smart suggestions for additional pieces to wardrobe",
+    context: "", rationale: "Building a more complete wardrobe for more options. Integrating monetizations through partnerships. More versatility. \"If you add these trousers you can have 12 new outfits in rotation\"",
+    optionsConsidered: "", decisionOwner: OWNER,
+    workflowStep: "Step 2: Generate the looks", otherLink: LINK, anchor: { colId: "c2", rowKey: "aiPass2" } },
+  // ----- Step 3: Review -----
+  { id: "d11", date: D, status: "Prioritized", subject: "\"Not my vibe\" / favorite feedback",
+    decision: "\"Not my vibe\" button with follow up question \"why not\" & \"I love this\" \"favorite\"",
+    context: "", rationale: "Help train AI to understand user's style preferences. User can build custom look books, to favorite looks for later.",
+    optionsConsidered: "", decisionOwner: OWNER,
+    workflowStep: "Step 3: Review", otherLink: LINK, anchor: { colId: "c3", rowKey: "aiPass2" } },
+  { id: "d12", date: D, status: "Prioritized", subject: "Natural-language fine tuning",
+    decision: "Natural language to fine tune selections (warmer, more casual, more colour)",
+    context: "", rationale: "Helps with accuracy of regeneration. Reduce AI token cost. Helps AI learn about user.",
+    optionsConsidered: "Voice or text, or both. Prompts/pills/chips.", decisionOwner: OWNER,
+    workflowStep: "Step 3: Review", otherLink: LINK, anchor: { colId: "c3", rowKey: "aiPass2" } },
+  { id: "d13", date: D, status: "Prioritized", subject: "Smart single-item swapping",
+    decision: "Smart swapping single items. and learns from every swap. or \"more like this\"",
+    context: "", rationale: "Offering further customization and flexibility to the user. More learning for the AI.",
+    optionsConsidered: "", decisionOwner: OWNER,
+    workflowStep: "Step 3: Review", otherLink: LINK, anchor: { colId: "c3", rowKey: "aiPass2" } },
+  { id: "d14", date: D, status: "Future state", subject: "On-body outfit preview",
+    decision: "Generate outfit on your body to preview with AI (can share measurements or photo of yourself in preferences or default to a mannequin/avatar)",
+    context: "", rationale: "Provides visualization without hassling the user to try everything on or envision in their head. Boosts confidence score. Potentially increases speed of decision. Try before you buy!",
+    optionsConsidered: "", decisionOwner: OWNER,
+    workflowStep: "Step 3: Review", otherLink: LINK, anchor: { colId: "c3", rowKey: "aiPass2" } },
+  // ----- Step 4: Select outfit -----
+  { id: "d15", date: D, status: "Prioritized", subject: "Calendar-aware repeat avoidance",
+    decision: "Calendar aware \"you work this week\" or \"you already wore this on 3 vacations\" \"you wore this to 3 client meetings\" try something new! (adjust in preferences?)",
+    context: "", rationale: "Avoid outfit repeats. User doesn't have to remember. Helps user try new things.",
+    optionsConsidered: "", decisionOwner: OWNER,
+    workflowStep: "Step 4: Select outfit", otherLink: LINK, anchor: { colId: "c4", rowKey: "aiPass2" } },
+  { id: "d16", date: D, status: "Future state", subject: "Shareable style look book",
+    decision: "Share a style look book, maybe a theme for a party, or a group vacation, or a night out.",
+    context: "", rationale: "Coordinating with friends, adds a social aspect. Makes planning easier.",
+    optionsConsidered: "", decisionOwner: OWNER,
+    workflowStep: "Step 4: Select outfit", otherLink: LINK, anchor: { colId: "c4", rowKey: "aiPass2" } },
+  // ----- Step 5: Confirmation -----
+  { id: "d17", date: D, status: "Prioritized", subject: "Confirmation-based style learning",
+    decision: "Learning your style with each confirmation or \"didn't work try something new\" with follow up questions like \"why didn't this work\" or \"how confident did you feel\" or rating",
+    context: "", rationale: "AI training on user's preferences. Builds trust between user and AI.",
+    optionsConsidered: "", decisionOwner: OWNER,
+    workflowStep: "Step 5: Confirmation", otherLink: LINK, anchor: { colId: "c5", rowKey: "aiPass2" } },
+  { id: "d18", date: D, status: "Future state", subject: "Declutter suggestions",
+    decision: "Declutter: auto suggest unworn items that go unselected",
+    context: "", rationale: "Assists user with mental and physical inventory of clothing usage, to make room for new pieces. Potentially help user repurpose pieces.",
+    optionsConsidered: "", decisionOwner: OWNER,
+    workflowStep: "Step 5: Confirmation", otherLink: LINK, anchor: { colId: "c5", rowKey: "aiPass2" } },
+  { id: "d19", date: D, status: "Future state", subject: "Wear tracker",
+    decision: "Tracker for how many times you wore the outfit or pieces",
+    context: "", rationale: "Compliments the \"Declutter\" feature proposal. Helps user understand the value of each piece.",
+    optionsConsidered: "#girlmath \"you wore these $200 jeans 20 times so it was really $10\" :)", decisionOwner: OWNER,
+    workflowStep: "Step 5: Confirmation", otherLink: LINK, anchor: { colId: "c5", rowKey: "aiPass2" } },
+];
+
+// ---------- Helpers ----------
+function download(filename, text, type) {
+  const blob = new Blob([text], { type: type || "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function csvEscape(v) {
+  const s = (v == null ? "" : String(v));
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function slug(s) { return (s || "untitled").replace(/\s+/g, "-").toLowerCase(); }
+
+function toLogEntry(d) {
+  return {
+    id: "",
+    date: d.date || "",
+    status: d.status || "",
+    subject: d.subject || "",
+    decision: d.decision || "",
+    context: d.context || "",
+    rationale: d.rationale || "",
+    optionsConsidered: d.optionsConsidered || "",
+    decisionOwner: d.decisionOwner || "",
+    workflowStep: d.workflowStep || "",
+    otherLink: d.otherLink || "",
+  };
+}
+
+// ---------- Auto-growing textarea ----------
+function GrowBox({ value, onChange, placeholder, small }) {
+  const ref = useRef(null);
+  const resize = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }, []);
+  useEffect(() => { resize(); }, [value, resize]);
+  return (
+    <textarea
+      ref={ref}
+      value={value || ""}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder || ""}
+      rows={1}
+      style={{
+        width: "100%", border: "none", outline: "none", resize: "none",
+        background: "transparent", fontFamily: SANS,
+        fontSize: small ? 12.5 : 13, lineHeight: 1.45, color: INK, padding: 0,
+        minHeight: 20, overflow: "hidden", boxSizing: "border-box",
+      }}
+    />
+  );
+}
+
+// ---------- Pill ----------
+function Pill({ children, tone, bg, fg, onClick }) {
+  const tones = {
+    accent: { bg: ACCENT_SOFT, fg: ACCENT },
+    neutral: { bg: "#F1EFEA", fg: "#6B665D" },
+    outline: { bg: "transparent", fg: ACCENT, bd: ACCENT },
+  };
+  const t = bg ? { bg, fg } : (tones[tone] || tones.neutral);
+  return (
+    <span onClick={onClick} style={{
+      display: "inline-flex", alignItems: "center", gap: 4, background: t.bg, color: t.fg,
+      border: `1px solid ${t.bd || "transparent"}`, borderRadius: 999, padding: "2px 9px",
+      fontSize: 10.5, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase",
+      fontFamily: SANS, whiteSpace: "nowrap", cursor: onClick ? "pointer" : "default",
+    }}>{children}</span>
+  );
+}
+
+// ---------- Buttons ----------
+function Btn({ children, onClick, primary, title, disabled, small }) {
+  return (
+    <button onClick={onClick} title={title} disabled={disabled} style={{
+      fontFamily: SANS, fontSize: small ? 11.5 : 12.5, fontWeight: 600,
+      padding: small ? "5px 10px" : "8px 14px", borderRadius: 8, cursor: disabled ? "default" : "pointer",
+      border: primary ? `1px solid ${ACCENT}` : `1px solid ${BORDER}`,
+      background: primary ? ACCENT : CARD_BG, color: primary ? "#FDFCFA" : INK,
+      opacity: disabled ? 0.45 : 1, transition: "all .12s", whiteSpace: "nowrap",
+    }}>{children}</button>
+  );
+}
+
+function IconBtn({ children, onClick, title, danger }) {
+  return (
+    <button onClick={onClick} title={title} style={{
+      width: 20, height: 20, borderRadius: 6, border: `1px solid ${BORDER}`,
+      background: CARD_BG, color: danger ? "#9C3D2E" : MUTED, fontSize: 11, cursor: "pointer",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      lineHeight: 1, padding: 0, fontFamily: SANS, flexShrink: 0,
+    }}>{children}</button>
+  );
+}
+
+// ---------- Export dropdown ----------
+function ExportMenu({ disabled, onText, onExcel, onJSON }) {
+  const [open, setOpen] = useState(false);
+  const itemStyle = {
+    display: "block", width: "100%", textAlign: "left", border: "none",
+    background: "transparent", padding: "9px 14px", fontSize: 12.5, fontWeight: 600,
+    fontFamily: SANS, color: INK, cursor: "pointer",
+  };
+  return (
+    <div style={{ position: "relative" }}>
+      <Btn primary disabled={disabled} onClick={() => setOpen((v) => !v)}>Export ▾</Btn>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 95,
+            background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 10,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.14)", minWidth: 175, overflow: "hidden",
+          }}>
+            <button style={itemStyle} onClick={() => { setOpen(false); onText(); }}
+              onMouseEnter={(e) => e.currentTarget.style.background = ACCENT_SOFT}
+              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+              Text (.txt)
+            </button>
+            <button style={itemStyle} onClick={() => { setOpen(false); onExcel(); }}
+              onMouseEnter={(e) => e.currentTarget.style.background = ACCENT_SOFT}
+              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+              Excel (.csv)
+            </button>
+            <button style={itemStyle} onClick={() => { setOpen(false); onJSON(); }}
+              onMouseEnter={(e) => e.currentTarget.style.background = ACCENT_SOFT}
+              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+              JSON (.json)
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------- Decision card ----------
+function DecisionCard({ d, onChange, onDelete, anchorLabel, highlight }) {
+  const set = (k, v) => onChange({ ...d, [k]: v });
+  const ss = STATUS_STYLE[d.status] || STATUS_STYLE["Proposed"];
+  const labelStyle = {
+    fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
+    color: MUTED, fontFamily: SANS, marginBottom: 3, display: "block",
+  };
+  const inputStyle = {
+    width: "100%", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 8px",
+    fontSize: 12.5, fontFamily: SANS, color: INK, background: "#FDFCFA", outline: "none",
+    boxSizing: "border-box", height: 32,
+  };
+  const areaWrap = { border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 9px", background: "#FDFCFA" };
+
+  return (
+    <div id={`dec-${d.id}`} style={{
+      background: CARD_BG, border: `1px solid ${highlight ? ACCENT : BORDER}`,
+      boxShadow: highlight ? `0 0 0 3px ${ACCENT_SOFT}` : "0 1px 3px rgba(0,0,0,0.04)",
+      borderRadius: 14, padding: "16px 18px", transition: "all .3s",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <Pill bg={ss.bg} fg={ss.fg}>{d.status || "Proposed"}</Pill>
+        {d.workflowStep ? <Pill tone="accent">{d.workflowStep}</Pill> : null}
+        {anchorLabel ? <Pill tone="outline">⊙ {anchorLabel}</Pill> : null}
+        <span style={{ flex: 1 }} />
+        <IconBtn danger title="Delete decision" onClick={onDelete}>×</IconBtn>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px 14px", marginBottom: 12 }}>
+        <div>
+          <label style={labelStyle}>Date</label>
+          <input type="date" value={d.date || ""} onChange={(e) => set("date", e.target.value)} style={inputStyle} />
+        </div>
+        <div>
+          <label style={labelStyle}>Status</label>
+          <select value={d.status || "Proposed"} onChange={(e) => set("status", e.target.value)}
+            style={{ ...inputStyle, cursor: "pointer" }}>
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Subject</label>
+          <input value={d.subject || ""} onChange={(e) => set("subject", e.target.value)} style={inputStyle} />
+        </div>
+        <div>
+          <label style={labelStyle}>Decision owner</label>
+          <input value={d.decisionOwner || ""} onChange={(e) => set("decisionOwner", e.target.value)} style={inputStyle} />
+        </div>
+        <div>
+          <label style={labelStyle}>Workflow step</label>
+          <input value={d.workflowStep || ""} onChange={(e) => set("workflowStep", e.target.value)} style={inputStyle} />
+        </div>
+        <div>
+          <label style={labelStyle}>Other link</label>
+          <input value={d.otherLink || ""} onChange={(e) => set("otherLink", e.target.value)} style={inputStyle} />
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px" }}>
+        <div>
+          <label style={labelStyle}>Decision</label>
+          <div style={areaWrap}><GrowBox small value={d.decision} onChange={(v) => set("decision", v)} placeholder="The call that was made…" /></div>
+        </div>
+        <div>
+          <label style={labelStyle}>Context</label>
+          <div style={areaWrap}><GrowBox small value={d.context} onChange={(v) => set("context", v)} /></div>
+        </div>
+        <div>
+          <label style={labelStyle}>Rationale</label>
+          <div style={areaWrap}><GrowBox small value={d.rationale} onChange={(v) => set("rationale", v)} /></div>
+        </div>
+        <div>
+          <label style={labelStyle}>Options considered</label>
+          <div style={areaWrap}><GrowBox small value={d.optionsConsidered} onChange={(v) => set("optionsConsidered", v)} /></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Main app ----------
+export default function WorkflowCapture({ onHome, onBackToLog, backLogLabel, focusStep }) {
+  const [info, setInfo] = useState(seedInfo);
+  const [columns, setColumns] = useState(seedColumns);
+  const [cells, setCells] = useState(seedCells);
+  const [subflows, setSubflows] = useState(seedSubflows);
+  const [decisions, setDecisions] = useState(seedDecisions);
+  const [nextId, setNextId] = useState(6);
+  const decIdRef = useRef(20);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showDesc, setShowDesc] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [highlightId, setHighlightId] = useState(null);
+  const [focusCol, setFocusCol] = useState(null);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    const l = document.createElement("link");
+    l.rel = "stylesheet";
+    l.href = "https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..600&display=swap";
+    document.head.appendChild(l);
+    return () => { document.head.removeChild(l); };
+  }, []);
+
+  // Scroll to + highlight the column matching a workflow step linked from the decision log.
+  useEffect(() => {
+    if (!focusStep) return;
+    const col = columns.find((c) => c.name === focusStep);
+    if (!col) return;
+    setFocusCol(col.id);
+    const el = document.getElementById("wfcol-" + col.id);
+    if (el) el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    const t = setTimeout(() => setFocusCol(null), 2600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusStep]);
+
+  const flash = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
+
+  const setCell = (colId, rowKey, val) =>
+    setCells((p) => ({ ...p, [colId]: { ...(p[colId] || {}), [rowKey]: val } }));
+
+  const addColumn = () => {
+    const id = "c" + nextId;
+    setColumns((p) => [...p, { id, name: "Step " + p.length }]);
+    setNextId((n) => n + 1);
+  };
+
+  const removeColumn = (id) => {
+    if (columns.length <= 1) return;
+    setColumns((p) => p.filter((c) => c.id !== id));
+    setCells((p) => { const n = { ...p }; delete n[id]; return n; });
+    setSubflows((p) => { const n = { ...p }; delete n[id]; return n; });
+  };
+
+  const moveColumn = (idx, dir) => {
+    const j = idx + dir;
+    if (j < 0 || j >= columns.length) return;
+    setColumns((p) => { const n = [...p]; [n[idx], n[j]] = [n[j], n[idx]]; return n; });
+  };
+
+  const renameColumn = (id, name) =>
+    setColumns((p) => p.map((c) => (c.id === id ? { ...c, name } : c)));
+
+  // ----- Decisions -----
+  const newDecision = (extra, opts = {}) => {
+    const { scroll = true } = opts;
+    const id = "d" + decIdRef.current++;
+    const d = {
+      id, date: info.date || new Date().toISOString().slice(0, 10),
+      status: "Proposed", subject: "", decisionOwner: "", decision: "",
+      context: "", rationale: "", optionsConsidered: "", workflowStep: "",
+      otherLink: "", anchor: null, ...extra,
+    };
+    setDecisions((p) => [...p, d]);
+    if (scroll) {
+      setHighlightId(id);
+      setTimeout(() => {
+        document.getElementById(`dec-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 60);
+      setTimeout(() => setHighlightId(null), 2200);
+    }
+    return d;
+  };
+
+  const logFromCell = (col, row) => {
+    newDecision({
+      workflowStep: col.name,
+      subject: row.label,
+      context: (cells[col.id]?.[row.key] || "").trim(),
+      anchor: { colId: col.id, rowKey: row.key },
+    });
+    flash(`Decision logged for ${col.name} · ${row.label}`);
+  };
+
+  const cellDecisions = (colId, rowKey) =>
+    decisions.filter((d) => d.anchor && d.anchor.colId === colId && d.anchor.rowKey === rowKey);
+
+  const jumpToDecision = (id) => {
+    setHighlightId(id);
+    document.getElementById(`dec-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => setHighlightId(null), 2200);
+  };
+
+  const anchorLabel = (d) => {
+    if (!d.anchor) return null;
+    const col = columns.find((c) => c.id === d.anchor.colId);
+    const row = ROWS.find((r) => r.key === d.anchor.rowKey);
+    if (!col || !row) return null;
+    return `${col.name} · ${row.label}`;
+  };
+
+  // ----- Decision exports -----
+  const LOG_HEADERS = ["id", "date", "status", "subject", "decision", "context", "rationale", "optionsConsidered", "decisionOwner", "workflowStep", "otherLink"];
+
+  const exportDecJSON = () => {
+    download(`decision-log-${slug(info.workflow)}.json`, JSON.stringify(decisions.map(toLogEntry), null, 2));
+    flash(`${decisions.length} decision${decisions.length === 1 ? "" : "s"} exported as JSON`);
+  };
+
+  const exportDecExcel = () => {
+    const rows = [LOG_HEADERS.join(",")].concat(
+      decisions.map((d) => { const e = toLogEntry(d); return LOG_HEADERS.map((h) => csvEscape(e[h])).join(","); })
+    );
+    download(`decision-log-${slug(info.workflow)}.csv`, rows.join("\n"), "text/csv");
+    flash("Exported as CSV (opens in Excel)");
+  };
+
+  const exportDecText = () => {
+    const txt = decisions.map((d, i) => {
+      const e = toLogEntry(d);
+      return [
+        `DECISION ${i + 1}`,
+        `Date: ${e.date}`,
+        `Status: ${e.status}`,
+        `Subject: ${e.subject}`,
+        `Decision owner: ${e.decisionOwner}`,
+        `Decision: ${e.decision}`,
+        `Context: ${e.context}`,
+        `Rationale: ${e.rationale}`,
+        `Options considered: ${e.optionsConsidered}`,
+        `Workflow step: ${e.workflowStep}`,
+        `Other link: ${e.otherLink}`,
+      ].join("\n");
+    }).join("\n\n" + "—".repeat(40) + "\n\n");
+    download(`decision-log-${slug(info.workflow)}.txt`, txt, "text/plain");
+    flash("Exported as text");
+  };
+
+  // ----- AI pass-2 sweep: decisions found -----
+  const pendingDecisions = columns
+    .map((c) => ({ col: c, text: (cells[c.id]?.aiPass2 || "").trim() }))
+    .filter((d) => d.text.length > 0);
+
+  const pass2Added = (colId) =>
+    decisions.some((d) => d.anchor && d.anchor.colId === colId && d.anchor.rowKey === "aiPass2");
+
+  const addPass2ToLog = (d) => {
+    newDecision({
+      workflowStep: d.col.name,
+      subject: `AI scope call — ${d.col.name}`,
+      decision: d.text,
+      otherLink: info.logLink || "",
+      anchor: { colId: d.col.id, rowKey: "aiPass2" },
+    }, { scroll: false });
+    flash(`Added to decision log: ${d.col.name}`);
+  };
+
+  const remainingPass2 = pendingDecisions.filter((d) => !pass2Added(d.col.id));
+
+  const addAllPass2 = () => {
+    const count = remainingPass2.length;
+    remainingPass2.forEach((d) => {
+      newDecision({
+        workflowStep: d.col.name,
+        subject: `AI scope call — ${d.col.name}`,
+        decision: d.text,
+        otherLink: info.logLink || "",
+        anchor: { colId: d.col.id, rowKey: "aiPass2" },
+      }, { scroll: false });
+    });
+    setShowPreview(false);
+    flash(`${count} decision${count === 1 ? "" : "s"} added to the log below`);
+  };
+
+  // ----- Workflow JSON export / import -----
+  const exportWorkflow = () => {
+    download(
+      `workflow-${slug(info.workflow)}.json`,
+      JSON.stringify({ kind: "workflow-capture", version: 2, info, columns, cells, subflows, decisions }, null, 2)
+    );
+    flash("Workflow exported");
+  };
+
+  const importWorkflow = (file) => {
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const d = JSON.parse(r.result);
+        if (!d.columns || !d.cells) throw new Error("bad file");
+        setInfo(d.info || {});
+        setColumns(d.columns);
+        setCells(d.cells);
+        setSubflows(d.subflows || {});
+        setDecisions(d.decisions || []);
+        const maxC = d.columns.reduce((m, c) => {
+          const n = parseInt(String(c.id).replace(/\D/g, ""), 10);
+          return isNaN(n) ? m : Math.max(m, n + 1);
+        }, 0);
+        setNextId(maxC);
+        decIdRef.current = (d.decisions || []).reduce((m, x) => {
+          const n = parseInt(String(x.id).replace(/\D/g, ""), 10);
+          return isNaN(n) ? m : Math.max(m, n + 1);
+        }, 2);
+        flash("Workflow imported");
+      } catch {
+        flash("Couldn't read that file — is it a workflow export?");
+      }
+    };
+    r.readAsText(file);
+  };
+
+  // ----- Grid CSV export -----
+  const exportCSV = () => {
+    const header = ["Field", ...columns.map((c) => c.name)].map(csvEscape).join(",");
+    const lines = ROWS.map((row) =>
+      [row.label, ...columns.map((c) => cells[c.id]?.[row.key] || "")].map(csvEscape).join(",")
+    );
+    download(`workflow-${slug(info.workflow)}.csv`, [header, ...lines].join("\n"), "text/csv");
+    flash("Grid CSV exported for FigJam");
+  };
+
+  const labelStyle = {
+    fontSize: 10.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
+    color: MUTED, fontFamily: SANS, marginBottom: 3, display: "block",
+  };
+  const inputStyle = {
+    width: "100%", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 9px",
+    fontSize: 13, fontFamily: SANS, color: INK, background: "#FDFCFA", outline: "none", boxSizing: "border-box",
+  };
+
+  const DESC_W = 230;
+
+  const crumbLink = {
+    background: "none", border: "none", padding: 0, font: "inherit", fontFamily: SANS,
+    fontSize: 12.5, color: ACCENT, cursor: "pointer", fontWeight: 600,
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: BASE_BG, color: INK, padding: "28px 28px 60px", fontFamily: SANS }}>
+      {/* ---------- Breadcrumb ---------- */}
+      {(onHome || onBackToLog) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16, fontSize: 12.5, flexWrap: "wrap" }}>
+          {onHome && <button style={crumbLink} onClick={onHome}>Decision Logs</button>}
+          {onBackToLog && <><span style={{ color: MUTED }}>/</span><button style={crumbLink} onClick={onBackToLog}>{backLogLabel || "Decision log"}</button></>}
+          <span style={{ color: MUTED }}>/</span>
+          <span style={{ color: MUTED }}>Workflow capture</span>
+        </div>
+      )}
+      {/* ---------- Page header ---------- */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 20 }}>
+        <div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            <Pill tone="accent">Workflow Capture</Pill>
+            <Pill tone="neutral">Companion · Decision Log</Pill>
+            {info.product ? <Pill tone="neutral">{info.product}</Pill> : null}
+          </div>
+          <h1 style={{ fontFamily: SERIF, fontWeight: 500, fontSize: 34, lineHeight: 1.1, margin: 0, color: ACCENT, letterSpacing: "-0.01em" }}>
+            {info.workflow || "Untitled workflow"}
+          </h1>
+          <p style={{ margin: "6px 0 0", fontSize: 13.5, color: MUTED, maxWidth: 560 }}>
+            Capture the steps, the people, the exceptions — and where AI could fit — while the nuance is still in the room.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Btn onClick={() => fileRef.current?.click()}>Import JSON</Btn>
+          <Btn onClick={exportWorkflow}>Export JSON</Btn>
+          <Btn onClick={exportCSV}>Grid CSV</Btn>
+          <Btn primary onClick={() => setShowPreview(true)} disabled={pendingDecisions.length === 0}
+            title={pendingDecisions.length === 0 ? "No AI pass-2 cells filled yet" : ""}>
+            Decisions found{pendingDecisions.length > 0 ? ` (${pendingDecisions.length})` : ""}
+          </Btn>
+          <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
+            onChange={(e) => { if (e.target.files?.[0]) importWorkflow(e.target.files[0]); e.target.value = ""; }} />
+        </div>
+      </div>
+
+      {/* ---------- Workflow info card ---------- */}
+      <div style={{ background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "18px 20px", marginBottom: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+        <h2 style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 600, margin: "0 0 14px", color: INK }}>Workflow info</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
+          {INFO_FIELDS.map((f) => (
+            <div key={f.key}>
+              <label style={labelStyle}>{f.label}</label>
+              <input type={f.type || "text"} value={info[f.key] || ""} style={inputStyle}
+                onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ---------- Capture grid ---------- */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
+        <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>Capture grid</h2>
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: showDesc ? ACCENT : MUTED, fontFamily: SANS }}>Descriptions</span>
+            <span role="switch" aria-checked={showDesc} tabIndex={0}
+              onClick={() => setShowDesc((v) => !v)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowDesc((v) => !v); } }}
+              style={{
+                position: "relative", width: 36, height: 20, borderRadius: 999, flexShrink: 0,
+                background: showDesc ? ACCENT : "#D8D4CC", transition: "background .15s",
+                display: "inline-block",
+              }}>
+              <span style={{
+                position: "absolute", top: 2, left: showDesc ? 18 : 2, width: 16, height: 16,
+                borderRadius: "50%", background: "#FDFCFA", transition: "left .15s",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+              }} />
+            </span>
+          </label>
+          <Btn onClick={addColumn}>+ Add step</Btn>
+        </div>
+      </div>
+
+      <div style={{ overflowX: "auto", border: `1px solid ${BORDER}`, borderRadius: 14, background: CARD_BG, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: 220 + (showDesc ? DESC_W : 0) + columns.length * 260 }}>
+          <thead>
+            <tr>
+              <th style={{
+                position: "sticky", left: 0, zIndex: 10, background: "#F5F3EF",
+                borderBottom: `2px solid ${ACCENT}`, borderRight: showDesc ? "none" : `1px solid ${BORDER}`,
+                padding: "10px 14px", textAlign: "left", minWidth: 210, width: 210,
+                fontFamily: SANS, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em",
+                textTransform: "uppercase", color: MUTED,
+              }}>Field</th>
+              {showDesc && (
+                <th style={{
+                  position: "sticky", left: 210, zIndex: 10, background: "#F5F3EF",
+                  borderBottom: `2px solid ${ACCENT}`, borderRight: `1px solid ${BORDER}`,
+                  padding: "10px 14px", textAlign: "left", minWidth: DESC_W, width: DESC_W,
+                  fontFamily: SANS, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em",
+                  textTransform: "uppercase", color: MUTED,
+                }}>Description</th>
+              )}
+              {columns.map((col, i) => (
+                <th key={col.id} id={"wfcol-" + col.id} style={{
+                  background: focusCol === col.id ? ACCENT_SOFT : "#F5F3EF", borderBottom: `2px solid ${ACCENT}`,
+                  borderRight: i < columns.length - 1 ? `1px solid ${BORDER}` : "none",
+                  boxShadow: focusCol === col.id ? `inset 0 0 0 2px ${ACCENT}` : "none",
+                  transition: "background .3s, box-shadow .3s",
+                  padding: "8px 12px", minWidth: 250, verticalAlign: "top",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <Pill tone={i === 0 ? "accent" : "neutral"}>{i === 0 ? "Trigger col" : `Step ${i}`}</Pill>
+                    <span style={{ flex: 1 }} />
+                    <IconBtn title="Move left" onClick={() => moveColumn(i, -1)}>‹</IconBtn>
+                    <IconBtn title="Move right" onClick={() => moveColumn(i, 1)}>›</IconBtn>
+                    <IconBtn danger title="Remove column" onClick={() => removeColumn(col.id)}>×</IconBtn>
+                  </div>
+                  <input value={col.name} onChange={(e) => renameColumn(col.id, e.target.value)}
+                    style={{
+                      width: "100%", border: "none", outline: "none", background: "transparent",
+                      fontFamily: SERIF, fontSize: 16, fontWeight: 600, color: ACCENT,
+                      padding: 0, boxSizing: "border-box",
+                    }} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ROWS.map((row, ri) => {
+              const isAI = row.key.startsWith("aiPass");
+              return (
+                <tr key={row.key}>
+                  <td style={{
+                    position: "sticky", left: 0, zIndex: 5,
+                    background: isAI ? ACCENT_SOFT : "#FBFAF8",
+                    borderBottom: ri < ROWS.length - 1 ? `1px solid ${BORDER}` : "none",
+                    borderRight: showDesc ? "none" : `1px solid ${BORDER}`,
+                    padding: "10px 14px", verticalAlign: "top", width: 210, minWidth: 210,
+                  }}>
+                    <span style={{
+                      fontSize: 12.5, fontWeight: 600, color: isAI ? ACCENT : INK,
+                      fontFamily: SANS, lineHeight: 1.3,
+                    }} title={row.tip}>{row.label}</span>
+                  </td>
+                  {showDesc && (
+                    <td style={{
+                      position: "sticky", left: 210, zIndex: 5,
+                      background: isAI ? ACCENT_SOFT : "#FBFAF8",
+                      borderBottom: ri < ROWS.length - 1 ? `1px solid ${BORDER}` : "none",
+                      borderRight: `1px solid ${BORDER}`,
+                      padding: "10px 14px", verticalAlign: "top", width: DESC_W, minWidth: DESC_W,
+                    }}>
+                      <span style={{
+                        fontSize: 11.5, color: MUTED, fontFamily: SANS, lineHeight: 1.45,
+                        fontStyle: "italic",
+                      }}>{row.tip}</span>
+                    </td>
+                  )}
+                  {columns.map((col, ci) => {
+                    const val = cells[col.id]?.[row.key] || "";
+                    const isBranch = row.key === "branches";
+                    const marked = isBranch && subflows[col.id] && val.trim();
+                    const attached = cellDecisions(col.id, row.key);
+                    return (
+                      <td key={col.id} style={{
+                        position: "relative",
+                        borderBottom: ri < ROWS.length - 1 ? `1px solid ${BORDER}` : "none",
+                        borderRight: ci < columns.length - 1 ? `1px solid ${BORDER}` : "none",
+                        padding: "9px 26px 9px 12px", verticalAlign: "top",
+                        background: isAI ? "#F7FAF8" : "transparent", minWidth: 250,
+                      }}>
+                        <button onClick={() => logFromCell(col, row)}
+                          title={`Log a decision on ${col.name} · ${row.label}`}
+                          style={{
+                            position: "absolute", top: 6, right: 6, width: 17, height: 17,
+                            borderRadius: 5, border: `1px solid ${BORDER}`, background: CARD_BG,
+                            color: MUTED, fontSize: 10, cursor: "pointer", lineHeight: 1,
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            padding: 0, opacity: 0.55, fontFamily: SANS,
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = ACCENT; e.currentTarget.style.borderColor = ACCENT; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.opacity = 0.55; e.currentTarget.style.color = MUTED; e.currentTarget.style.borderColor = BORDER; }}
+                        >✚</button>
+                        <GrowBox value={val} onChange={(v) => setCell(col.id, row.key, v)}
+                          placeholder={ri === 0 && !val ? "…" : ""} />
+                        {attached.length > 0 && (
+                          <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            {attached.map((d) => (
+                              <Pill key={d.id} tone="accent" onClick={() => jumpToDecision(d.id)}>
+                                ⊙ {d.subject || "decision"}
+                              </Pill>
+                            ))}
+                          </div>
+                        )}
+                        {isBranch && val.trim() && (
+                          <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                            {marked ? <Pill tone="outline">↳ linked sub-flow</Pill> : null}
+                            <button onClick={() => setSubflows((p) => ({ ...p, [col.id]: !p[col.id] }))}
+                              style={{
+                                border: "none", background: "transparent", color: MUTED,
+                                fontSize: 10.5, cursor: "pointer", padding: 0, fontFamily: SANS,
+                                textDecoration: "underline", textUnderlineOffset: 2,
+                              }}>
+                              {marked ? "unmark" : "mark as linked sub-flow"}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <p style={{ fontSize: 11.5, color: MUTED, marginTop: 10 }}>
+        Tip: flip the <span style={{ fontWeight: 600 }}>Descriptions</span> toggle to pin a column explaining each field. Use a cell's <span style={{ fontWeight: 600 }}>✚</span> to log a decision pinned to that cell — it lands in the decisions section below.
+      </p>
+
+      {/* ---------- Decisions section ---------- */}
+      <div style={{ marginTop: 30 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+          <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>Decisions</h2>
+          <Pill tone="neutral">{decisions.length} logged</Pill>
+          <span style={{ flex: 1 }} />
+          <Btn onClick={() => { newDecision({}); flash("Decision added"); }}>+ Add decision</Btn>
+          <ExportMenu
+            disabled={decisions.length === 0}
+            onText={exportDecText}
+            onExcel={exportDecExcel}
+            onJSON={exportDecJSON}
+          />
+        </div>
+        <p style={{ fontSize: 12.5, color: MUTED, margin: "0 0 14px", maxWidth: 640 }}>
+          Notes captured here travel to the Decision Log. Decisions pinned from a grid cell carry a <span style={{ fontWeight: 600 }}>⊙</span> tag back to their cell; JSON exports leave <span style={{ fontFamily: "ui-monospace, monospace" }}>id</span> blank so the log assigns it on import.
+        </p>
+
+        {decisions.length === 0 ? (
+          <div style={{
+            border: `1.5px dashed ${BORDER}`, borderRadius: 14, padding: "26px 20px",
+            textAlign: "center", color: MUTED, fontSize: 13,
+          }}>
+            No decisions yet. Use <span style={{ fontWeight: 600 }}>+ Add decision</span>, the <span style={{ fontWeight: 600 }}>✚</span> on any grid cell, or <span style={{ fontWeight: 600 }}>Decisions found</span> to pull in AI pass-2 calls.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {[...decisions].reverse().map((d) => (
+              <DecisionCard key={d.id} d={d}
+                highlight={highlightId === d.id}
+                anchorLabel={anchorLabel(d)}
+                onChange={(nd) => setDecisions((p) => p.map((x) => (x.id === d.id ? nd : x)))}
+                onDelete={() => setDecisions((p) => p.filter((x) => x.id !== d.id))}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ---------- Decisions found modal ---------- */}
+      {showPreview && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(43,42,39,0.45)", zIndex: 100,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+        }} onClick={() => setShowPreview(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: CARD_BG, borderRadius: 16, padding: "22px 24px", maxWidth: 560,
+            width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
+          }}>
+            <h3 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 600, margin: "0 0 4px", color: ACCENT }}>
+              Decisions found
+            </h3>
+            <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px" }}>
+              {pendingDecisions.length} scoped call{pendingDecisions.length === 1 ? "" : "s"} found in the AI — pass 2 row. Add each one to the decision log below, where you can fill in status, owner, rationale, and the rest before exporting.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+              {pendingDecisions.map((d) => {
+                const added = pass2Added(d.col.id);
+                return (
+                  <div key={d.col.id} style={{
+                    border: `1px solid ${added ? ACCENT : BORDER}`, borderRadius: 10,
+                    padding: "10px 12px", background: added ? "#F7FAF8" : "transparent",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <Pill tone="accent">{d.col.name}</Pill>
+                      <span style={{ flex: 1 }} />
+                      {added ? (
+                        <Pill tone="outline">✓ In log</Pill>
+                      ) : (
+                        <Btn small primary onClick={() => addPass2ToLog(d)}>Add to log</Btn>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 12.5, margin: 0, lineHeight: 1.45, whiteSpace: "pre-wrap" }}>{d.text}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn onClick={() => setShowPreview(false)}>Done</Btn>
+              <Btn primary disabled={remainingPass2.length === 0} onClick={addAllPass2}>
+                Add all ({remainingPass2.length})
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Toast ---------- */}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+          background: ACCENT, color: "#FDFCFA", padding: "10px 18px", borderRadius: 999,
+          fontSize: 13, fontWeight: 600, fontFamily: SANS, zIndex: 200,
+        }}>{toast}</div>
+      )}
+    </div>
+  );
+}
