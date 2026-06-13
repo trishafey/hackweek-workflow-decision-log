@@ -75,6 +75,25 @@ function blankWorkflow(name, product, owner) {
 /*  Decision Logs home                                                */
 /* ------------------------------------------------------------------ */
 
+// Per-row kebab (⋯) menu with Archive/Unarchive + Delete.
+function RowMenu({ archived, onArchive, onDelete }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="home-menu" onClick={(e) => e.stopPropagation()}>
+      <button className="home-kebab" title="Actions" aria-label="Row actions" onClick={() => setOpen((o) => !o)}>⋯</button>
+      {open && (
+        <>
+          <div className="home-menu-scrim" onClick={() => setOpen(false)} />
+          <div className="home-menu-pop">
+            <button onClick={() => { setOpen(false); onArchive(); }}>{archived ? "Unarchive" : "Archive"}</button>
+            <button className="danger" onClick={() => { setOpen(false); onDelete(); }}>Delete</button>
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
 function LogsHome({ logs, onOpen, onCreate, onWorkflows, onArchive, onDelete }) {
   const [creating, setCreating] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -119,11 +138,10 @@ function LogsHome({ logs, onOpen, onCreate, onWorkflows, onArchive, onDelete }) 
                   <td className="dim">{l.owner || "—"}</td>
                   <td className="num">{s.count}</td>
                   <td className="dim">{s.updated}</td>
-                  <td className="home-rowactions" onClick={(e) => e.stopPropagation()}>
-                    <button className="home-iconbtn" title={l.archived ? "Unarchive" : "Archive"}
-                      onClick={() => onArchive(l.id, !l.archived)}>{l.archived ? "Unarchive" : "Archive"}</button>
-                    <button className="home-iconbtn danger" title="Delete permanently"
-                      onClick={() => { if (window.confirm(`Delete "${l.title}" and all its decisions? This can't be undone.`)) onDelete(l.id); }}>Delete</button>
+                  <td className="home-rowactions">
+                    <RowMenu archived={l.archived}
+                      onArchive={() => onArchive(l.id, !l.archived)}
+                      onDelete={() => { if (window.confirm(`Delete "${l.title}" and all its decisions? This can't be undone.`)) onDelete(l.id); }} />
                   </td>
                 </tr>
               );
@@ -246,11 +264,10 @@ function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onArchive, onDelet
                 <td className="dim">{w.owner || "—"}</td>
                 <td className="num">{w.steps ?? "—"}</td>
                 <td className="dim">{w.updated || "—"}</td>
-                <td className="home-rowactions" onClick={(e) => e.stopPropagation()}>
-                  <button className="home-iconbtn" title={w.archived ? "Unarchive" : "Archive"}
-                    onClick={() => onArchive(w.id, !w.archived)}>{w.archived ? "Unarchive" : "Archive"}</button>
-                  <button className="home-iconbtn danger" title="Delete permanently"
-                    onClick={() => { if (window.confirm(`Delete the workflow "${w.name}"? This can't be undone.`)) onDelete(w.id); }}>Delete</button>
+                <td className="home-rowactions">
+                  <RowMenu archived={w.archived}
+                    onArchive={() => onArchive(w.id, !w.archived)}
+                    onDelete={() => { if (window.confirm(`Delete the workflow "${w.name}"? This can't be undone.`)) onDelete(w.id); }} />
                 </td>
               </tr>
             ))}
@@ -282,12 +299,33 @@ function routeToHash(r) {
   return "#/logs";
 }
 
+// ---- localStorage persistence ----
+const LS_KEY = "hwk-dl-state-v1";
+function loadSaved() {
+  try {
+    const raw = window.localStorage.getItem(LS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore corrupt/unavailable storage */ }
+  return null;
+}
+
 export default function App() {
-  const [logs, setLogs] = useState(INITIAL_LOGS);
-  const [workflows, setWorkflows] = useState(INITIAL_WORKFLOWS);
+  const saved = loadSaved();
+  const [logs, setLogs] = useState(saved?.logs ?? INITIAL_LOGS);
+  const [workflows, setWorkflows] = useState(saved?.workflows ?? INITIAL_WORKFLOWS);
   const [route, setRoute] = useState(hashToRoute);
   const routeRef = useRef(route);
   routeRef.current = route;
+
+  // Persist logs + workflows so changes survive a reload.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LS_KEY, JSON.stringify({ logs, workflows }));
+    } catch (e) {
+      // Most likely the quota was exceeded (e.g. large image attachments).
+      console.warn("Could not save to localStorage:", e);
+    }
+  }, [logs, workflows]);
 
   // Keep the URL hash in sync with the route (so each page has a unique URL).
   useEffect(() => {
@@ -460,12 +498,20 @@ const HOME_CSS = `
 .home-badge{display:inline-block;margin-left:8px;font-size:9.5px;font-weight:700;letter-spacing:.04em;
   text-transform:uppercase;color:var(--ink-faint);background:var(--line-soft);border:1px solid var(--line);
   padding:1px 6px;border-radius:5px;vertical-align:middle}
-.home-rowactions{text-align:right;white-space:nowrap}
-.home-iconbtn{font-family:inherit;font-size:11.5px;font-weight:600;color:var(--ink-soft);background:transparent;
-  border:1px solid var(--line);border-radius:7px;padding:4px 9px;cursor:pointer;margin-left:6px;transition:.12s}
-.home-iconbtn:hover{border-color:#d8d4cc;background:var(--surface)}
-.home-iconbtn.danger{color:var(--danger)}
-.home-iconbtn.danger:hover{background:#FBEBEA;border-color:#f0d4d0}
+.home-rowactions{text-align:right;white-space:nowrap;width:48px}
+.home-menu{position:relative;display:inline-block}
+.home-kebab{font-family:inherit;font-size:16px;line-height:1;color:var(--ink-faint);background:transparent;
+  border:1px solid transparent;border-radius:7px;width:30px;height:28px;cursor:pointer;transition:.12s}
+.home-kebab:hover{background:var(--line-soft);color:var(--ink);border-color:var(--line)}
+.home-menu-scrim{position:fixed;inset:0;z-index:30}
+.home-menu-pop{position:absolute;right:0;top:calc(100% + 4px);z-index:31;background:var(--surface);
+  border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 26px -10px rgba(0,0,0,.25);
+  padding:4px;min-width:130px;display:flex;flex-direction:column;text-align:left}
+.home-menu-pop button{font-family:inherit;font-size:12.5px;font-weight:600;color:var(--ink);background:transparent;
+  border:none;border-radius:6px;padding:8px 10px;text-align:left;cursor:pointer}
+.home-menu-pop button:hover{background:var(--accent-tint)}
+.home-menu-pop button.danger{color:var(--danger)}
+.home-menu-pop button.danger:hover{background:#FBEBEA}
 .mono{font-family:"SF Mono",ui-monospace,"JetBrains Mono",monospace}
 
 /* buttons */
