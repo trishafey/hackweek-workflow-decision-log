@@ -66,12 +66,12 @@ const CLM_CSS = `
 @media (max-width:560px){.home-modal .hm-grid{grid-template-columns:1fr}}
 `;
 
-export default function CreateLogModal({ onClose, onCreate, existingCodes }) {
+export default function CreateLogModal({ onClose, onCreate, existingCodes, initialWorkflowLink = "" }) {
   const [owner, setOwner] = useState("");
   const [product, setProduct] = useState("");
   const [feature, setFeature] = useState("");
   const [logId, setLogId] = useState("");
-  const [workflowLink, setWorkflowLink] = useState("");
+  const [workflowLink, setWorkflowLink] = useState(initialWorkflowLink);
   const [projectLinks, setProjectLinks] = useState([]);
 
   const generate = () => setLogId(`${code(product, 3)}-${code(feature, 5)}-001`);

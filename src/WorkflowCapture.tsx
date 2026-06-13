@@ -1354,6 +1354,7 @@ export default function WorkflowCapture({
       {addToLog && addToLog.step === "create" && (
         <CreateLogModal
           existingCodes={existingLogCodes}
+          initialWorkflowLink={typeof window !== "undefined" ? window.location.href : ""}
           onClose={() => (logsIndex.length ? setAddToLog((a) => ({ ...a, step: "select" })) : setAddToLog(null))}
           onCreate={(meta) => {
             const id = onCreateLog ? onCreateLog(meta) : null;
