@@ -75,8 +75,12 @@ function blankWorkflow(name, product, owner) {
 /*  Decision Logs home                                                */
 /* ------------------------------------------------------------------ */
 
-function LogsHome({ logs, onOpen, onCreate, onWorkflows }) {
+function LogsHome({ logs, onOpen, onCreate, onWorkflows, onArchive, onDelete }) {
   const [creating, setCreating] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const archivedCount = logs.filter((l) => l.archived).length;
+  const viewingArchived = showArchived && archivedCount > 0;
+  const rows = logs.filter((l) => (viewingArchived ? l.archived : !l.archived));
   return (
     <div className="home-root">
       <style>{HOME_CSS}</style>
@@ -90,21 +94,37 @@ function LogsHome({ logs, onOpen, onCreate, onWorkflows }) {
           <button className="hm-btn primary lg" onClick={() => setCreating(true)}>+ New decision log</button>
         </div>
       </header>
+      {archivedCount > 0 && (
+        <div className="home-archive-row">
+          <button className="hm-link" onClick={() => setShowArchived((v) => !v)}>
+            {viewingArchived ? "← Back to active" : `View archived (${archivedCount})`}
+          </button>
+        </div>
+      )}
       <div className="home-table-wrap">
         <table className="home-tbl">
           <thead>
-            <tr><th>Decision log</th><th>Product</th><th>Owner</th><th className="num-h">Decisions</th><th>Updated</th></tr>
+            <tr><th>Decision log</th><th>Product</th><th>Owner</th><th className="num-h">Decisions</th><th>Updated</th><th></th></tr>
           </thead>
           <tbody>
-            {logs.map((l) => {
+            {rows.length === 0 && (
+              <tr><td colSpan={6} className="home-empty">{viewingArchived ? "No archived logs." : "No decision logs yet."}</td></tr>
+            )}
+            {rows.map((l) => {
               const s = summarize(l.entries);
               return (
                 <tr key={l.id} onClick={() => onOpen(l.id)}>
-                  <td className="home-name">{l.title}</td>
+                  <td className="home-name">{l.title}{l.archived ? <span className="home-badge">Archived</span> : null}</td>
                   <td className="dim">{l.product || "—"}</td>
                   <td className="dim">{l.owner || "—"}</td>
                   <td className="num">{s.count}</td>
                   <td className="dim">{s.updated}</td>
+                  <td className="home-rowactions" onClick={(e) => e.stopPropagation()}>
+                    <button className="home-iconbtn" title={l.archived ? "Unarchive" : "Archive"}
+                      onClick={() => onArchive(l.id, !l.archived)}>{l.archived ? "Unarchive" : "Archive"}</button>
+                    <button className="home-iconbtn danger" title="Delete permanently"
+                      onClick={() => { if (window.confirm(`Delete "${l.title}" and all its decisions? This can't be undone.`)) onDelete(l.id); }}>Delete</button>
+                  </td>
                 </tr>
               );
             })}
@@ -176,13 +196,17 @@ function CreateWorkflowModal({ onClose, onCreate }) {
 /*  Workflows home (searchable index)                                 */
 /* ------------------------------------------------------------------ */
 
-function WorkflowsHome({ workflows, onOpen, onCreate, onLogs }) {
+function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onArchive, onDelete }) {
   const [creating, setCreating] = useState(false);
   const [q, setQ] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const needle = q.trim().toLowerCase();
+  const archivedCount = workflows.filter((w) => w.archived).length;
+  const viewingArchived = showArchived && archivedCount > 0;
+  const scope = workflows.filter((w) => (viewingArchived ? w.archived : !w.archived));
   const rows = needle
-    ? workflows.filter((w) => `${w.name} ${w.product} ${w.owner}`.toLowerCase().includes(needle))
-    : workflows;
+    ? scope.filter((w) => `${w.name} ${w.product} ${w.owner}`.toLowerCase().includes(needle))
+    : scope;
   return (
     <div className="home-root">
       <style>{HOME_CSS}</style>
@@ -199,24 +223,35 @@ function WorkflowsHome({ workflows, onOpen, onCreate, onLogs }) {
       <div className="home-search-row">
         <input className="home-search" value={q} onChange={(e) => setQ(e.target.value)}
           placeholder="Search workflows by name, product, or owner…" />
-        <span className="home-count">{rows.length} of {workflows.length}</span>
+        <span className="home-count">{rows.length} of {scope.length}</span>
+        {archivedCount > 0 && (
+          <button className="hm-link" onClick={() => setShowArchived((v) => !v)}>
+            {viewingArchived ? "← Back to active" : `View archived (${archivedCount})`}
+          </button>
+        )}
       </div>
       <div className="home-table-wrap">
         <table className="home-tbl">
           <thead>
-            <tr><th>Workflow</th><th>Product</th><th>Owner</th><th className="num-h">Steps</th><th>Updated</th></tr>
+            <tr><th>Workflow</th><th>Product</th><th>Owner</th><th className="num-h">Steps</th><th>Updated</th><th></th></tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={5} className="home-empty">No workflows match “{q}”.</td></tr>
+              <tr><td colSpan={6} className="home-empty">{needle ? `No workflows match “${q}”.` : (viewingArchived ? "No archived workflows." : "No workflows yet.")}</td></tr>
             )}
             {rows.map((w) => (
               <tr key={w.id} onClick={() => onOpen(w.id)}>
-                <td className="home-name">{w.name}</td>
+                <td className="home-name">{w.name}{w.archived ? <span className="home-badge">Archived</span> : null}</td>
                 <td className="dim">{w.product || "—"}</td>
                 <td className="dim">{w.owner || "—"}</td>
                 <td className="num">{w.steps ?? "—"}</td>
                 <td className="dim">{w.updated || "—"}</td>
+                <td className="home-rowactions" onClick={(e) => e.stopPropagation()}>
+                  <button className="home-iconbtn" title={w.archived ? "Unarchive" : "Archive"}
+                    onClick={() => onArchive(w.id, !w.archived)}>{w.archived ? "Unarchive" : "Archive"}</button>
+                  <button className="home-iconbtn danger" title="Delete permanently"
+                    onClick={() => { if (window.confirm(`Delete the workflow "${w.name}"? This can't be undone.`)) onDelete(w.id); }}>Delete</button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -272,6 +307,10 @@ export default function App() {
   }, []);
 
   const updateLog = (id, updater) => setLogs((ls) => ls.map((l) => (l.id === id ? updater(l) : l)));
+  const setLogArchived = (id, archived) => updateLog(id, (p) => ({ ...p, archived }));
+  const deleteLog = (id) => setLogs((ls) => ls.filter((l) => l.id !== id));
+  const setWorkflowArchived = (id, archived) => setWorkflows((ws) => ws.map((w) => (w.id === id ? { ...w, archived } : w)));
+  const deleteWorkflow = (id) => setWorkflows((ws) => ws.filter((w) => w.id !== id));
 
   // Creates a log and returns its id without navigating (used by the
   // workflow page's "Add to Decision Log" flow).
@@ -352,12 +391,12 @@ export default function App() {
   }
 
   if (route.view === "workflows") {
-    return <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={() => setRoute({ view: "logs" })} />;
+    return <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={() => setRoute({ view: "logs" })} onArchive={setWorkflowArchived} onDelete={deleteWorkflow} />;
   }
 
   if (route.view === "log") {
     const log = logs.find((l) => l.id === route.id);
-    if (!log) return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} />;
+    if (!log) return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onArchive={setLogArchived} onDelete={deleteLog} />;
     return (
       <DecisionLog
         key={log.id}
@@ -370,7 +409,7 @@ export default function App() {
     );
   }
 
-  return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} />;
+  return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onArchive={setLogArchived} onDelete={deleteLog} />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -417,6 +456,16 @@ const HOME_CSS = `
 .home-tbl .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-soft)}
 .home-tbl .dim{color:var(--ink-faint)}
 .home-empty{text-align:center;color:var(--ink-faint);font-style:italic;padding:32px 0}
+.home-archive-row{margin-top:14px}
+.home-badge{display:inline-block;margin-left:8px;font-size:9.5px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-faint);background:var(--line-soft);border:1px solid var(--line);
+  padding:1px 6px;border-radius:5px;vertical-align:middle}
+.home-rowactions{text-align:right;white-space:nowrap}
+.home-iconbtn{font-family:inherit;font-size:11.5px;font-weight:600;color:var(--ink-soft);background:transparent;
+  border:1px solid var(--line);border-radius:7px;padding:4px 9px;cursor:pointer;margin-left:6px;transition:.12s}
+.home-iconbtn:hover{border-color:#d8d4cc;background:var(--surface)}
+.home-iconbtn.danger{color:var(--danger)}
+.home-iconbtn.danger:hover{background:#FBEBEA;border-color:#f0d4d0}
 .mono{font-family:"SF Mono",ui-monospace,"JetBrains Mono",monospace}
 
 /* buttons */
