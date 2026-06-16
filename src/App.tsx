@@ -3,6 +3,7 @@ import DecisionLog, { OUTFIT_ENTRIES, ProjectLinksEditor, emptyEntry, makeId, ne
 import CreateLogModal, { code } from "./CreateLogModal";
 import { HACKWEEK_ENTRIES } from "./hackweekData";
 import WorkflowCapture from "./WorkflowCapture";
+import { loadLocal, saveLocal, loadRemote, saveRemote } from "./store";
 
 const SUBTITLE = "A record of what was decided, and why.";
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -299,14 +300,9 @@ function routeToHash(r) {
   return "#/logs";
 }
 
-// ---- localStorage persistence ----
-const LS_KEY = "hwk-dl-state-v1";
+// ---- persistence: localStorage now, Cloudflare D1 (/api/state) when deployed ----
 function loadSaved() {
-  try {
-    const raw = window.localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore corrupt/unavailable storage */ }
-  return null;
+  return loadLocal();
 }
 
 export default function App() {
@@ -316,15 +312,31 @@ export default function App() {
   const [route, setRoute] = useState(hashToRoute);
   const routeRef = useRef(route);
   routeRef.current = route;
+  const apiPresent = useRef(false); // true once the backend API has responded
+  const hydrated = useRef(false);   // true after the initial server load attempt
 
-  // Persist logs + workflows so changes survive a reload.
+  // On mount, try to load the shared workspace from the database. If there's no
+  // backend (e.g. plain static hosting), we silently stay on localStorage.
   useEffect(() => {
-    try {
-      window.localStorage.setItem(LS_KEY, JSON.stringify({ logs, workflows }));
-    } catch (e) {
-      // Most likely the quota was exceeded (e.g. large image attachments).
-      console.warn("Could not save to localStorage:", e);
-    }
+    let cancelled = false;
+    loadRemote()
+      .then((d) => {
+        apiPresent.current = true;
+        if (cancelled || !d) return;
+        if (Array.isArray(d.logs) && d.logs.length) setLogs(d.logs);
+        if (Array.isArray(d.workflows) && d.workflows.length) setWorkflows(d.workflows);
+      })
+      .catch(() => { apiPresent.current = false; })
+      .finally(() => { hydrated.current = true; });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Persist changes: always to localStorage; debounced to the database when present.
+  useEffect(() => {
+    saveLocal({ logs, workflows });
+    if (!hydrated.current || !apiPresent.current) return;
+    const t = setTimeout(() => { saveRemote({ logs, workflows }).catch(() => {}); }, 600);
+    return () => clearTimeout(t);
   }, [logs, workflows]);
 
   // Keep the URL hash in sync with the route (so each page has a unique URL).

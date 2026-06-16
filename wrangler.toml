@@ -1,0 +1,12 @@
+# Cloudflare Pages + Functions + D1 configuration.
+# The Pages project serves the built SPA (dist) and the /api functions.
+name = "experiments-projects"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "dist"
+
+# D1 binding used by functions/api/*.  Create the DB and paste its id below:
+#   npx wrangler d1 create decision-log
+[[d1_databases]]
+binding = "DB"
+database_name = "decision-log"
+database_id = "PASTE_DATABASE_ID_HERE"

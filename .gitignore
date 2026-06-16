@@ -4,3 +4,7 @@ dist
 .DS_Store
 
 tsconfig.tsbuildinfo
+
+# Cloudflare / wrangler local state
+.wrangler
+.dev.vars
