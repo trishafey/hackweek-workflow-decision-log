@@ -9,4 +9,4 @@ pages_build_output_dir = "dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "decision-log"
-database_id = "PASTE_DATABASE_ID_HERE"
+database_id = "ec46ded4-e9a2-4d7f-8bf5-426da5218c23"
