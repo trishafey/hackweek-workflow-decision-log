@@ -10,7 +10,8 @@
     "db:create": "wrangler d1 create decision-log",
     "db:migrate": "wrangler d1 migrations apply decision-log --remote",
     "db:migrate:local": "wrangler d1 migrations apply decision-log --local",
-    "pages:dev": "npm run build && wrangler pages dev dist --d1 DB=decision-log"
+    "dev:worker": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "lucide-react": "^0.469.0",

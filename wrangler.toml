@@ -1,11 +1,15 @@
-# Cloudflare Pages + Functions + D1 configuration.
-# The Pages project serves the built SPA (dist) and the /api functions.
-name = "experiments-projects"
+# Cloudflare Worker (with static assets) — serves the SPA and the /api routes.
+name = "hackweek-workflow-decision-log"
+main = "src/worker.ts"
 compatibility_date = "2025-01-01"
-pages_build_output_dir = "dist"
 
-# D1 binding used by functions/api/*.  Create the DB and paste its id below:
-#   npx wrangler d1 create decision-log
+# Static SPA built by `npm run build` into ./dist, served by the Worker.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# D1 database used by /api routes.
 [[d1_databases]]
 binding = "DB"
 database_name = "decision-log"
