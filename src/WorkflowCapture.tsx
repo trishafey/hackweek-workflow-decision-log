@@ -591,6 +591,27 @@ export default function WorkflowCapture({
   const setNextId = (u) => updateFlow(activeFlowId, (f) => ({ nextId: typeof u === "function" ? u(f.nextId) : u }));
   const flowName = (id) => flows.find((f) => f.id === id)?.name;
   const flowColumns = (id) => flows.find((f) => f.id === id)?.columns || [];
+  const colNameOf = (flowId, colId) => flowColumns(flowId).find((c) => c.id === colId)?.name || "";
+  // All (flow,column) branch points that link to a given flow.
+  const parentsOf = (flowId) => {
+    const out = [];
+    flows.forEach((f) => Object.entries(f.subflows || {}).forEach(([colId, t]) => { if (t === flowId) out.push({ flowId: f.id, colId }); }));
+    return out;
+  };
+  // Walk up first-parents to build a breadcrumb chain main → … → current.
+  const lineage = (flowId) => {
+    const chain = [{ flowId }];
+    const seen = new Set([flowId]);
+    let cur = flowId;
+    while (true) {
+      const p = parentsOf(cur)[0];
+      if (!p || seen.has(p.flowId)) break;
+      seen.add(p.flowId);
+      chain.unshift({ flowId: p.flowId, viaColId: p.colId });
+      cur = p.flowId;
+    }
+    return chain;
+  };
 
   // ----- Sub-flow (branch) management -----
   const newFlowId = () => "flow-" + (flowSeqRef.current++);
@@ -598,9 +619,16 @@ export default function WorkflowCapture({
     const sourceId = activeFlowId;
     const nm = ((text || "").split("\n")[0].trim().slice(0, 32)) || ("Branch " + flows.length);
     const id = newFlowId();
+    // First column carries the step this branch came from ("Previous step").
+    const fromStep = (activeFlow.columns.find((c) => c.id === colId)?.name) || "";
     setFlows((fs) =>
       fs.map((f) => (f.id === sourceId ? { ...f, subflows: { ...f.subflows, [colId]: id } } : f))
-        .concat([{ id, name: nm, columns: [{ id: "c0", name: "Trigger" }, { id: "c1", name: "Step 1" }], cells: {}, subflows: {}, nextId: 2 }]));
+        .concat([{
+          id, name: nm,
+          columns: [{ id: "c0", name: "Previous step" }, { id: "c1", name: "Step 1" }],
+          cells: { c0: { step: fromStep } },
+          subflows: {}, nextId: 2,
+        }]));
     setActiveFlowId(id);
     flash(`Created sub-flow "${nm}"`);
   };
@@ -1120,6 +1148,35 @@ export default function WorkflowCapture({
       {view === "diagram" ? (
         <WorkflowDiagram flows={flows} decisions={decisions} />
       ) : (<>
+      {/* Branch lineage breadcrumb (only for sub-flows) */}
+      {activeFlowId !== "main" && (() => {
+        const chain = lineage(activeFlowId);
+        const extra = parentsOf(activeFlowId).length - 1;
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10, fontFamily: SANS, fontSize: 12 }}>
+            <span style={{ color: MUTED, fontWeight: 600 }}>Branched from:</span>
+            {chain.map((seg, i) => {
+              const isActive = seg.flowId === activeFlowId;
+              return (
+                <span key={seg.flowId + i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <button onClick={() => setActiveFlowId(seg.flowId)} style={{
+                    fontFamily: SANS, fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+                    border: `1px solid ${isActive ? ACCENT : BORDER}`, borderRadius: 999,
+                    background: isActive ? ACCENT_SOFT : "#fff", color: isActive ? ACCENT : INK, padding: "2px 10px",
+                  }}>{seg.flowId === "main" ? "Main flow" : (flowName(seg.flowId) || "Sub-flow")}</button>
+                  {seg.viaColId ? (
+                    <span style={{ color: MUTED, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 11 }}>↳ {colNameOf(seg.flowId, seg.viaColId)}</span>
+                      <span style={{ color: BORDER }}>→</span>
+                    </span>
+                  ) : null}
+                </span>
+              );
+            })}
+            {extra > 0 && <span style={{ color: MUTED, fontStyle: "italic" }}>(+{extra} other branch{extra === 1 ? "" : "es"} link here)</span>}
+          </div>
+        );
+      })()}
       {/* Flow tabs: main flow + branch sub-flows */}
       <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10, flexWrap: "wrap", borderBottom: `1px solid ${BORDER}`, paddingBottom: 2 }}>
         {flows.map((f) => {
