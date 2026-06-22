@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import CreateLogModal from "./CreateLogModal";
 import { FILLABLE_LOG, suggestLogField } from "./DecisionLogApp";
+import WorkflowDiagram from "./WorkflowDiagram";
 
 // ---------- Theme ----------
 const ACCENT = "#1F3A34";
@@ -626,6 +627,7 @@ export default function WorkflowCapture({
   const [showPreview, setShowPreview] = useState(false);
   const [showDesc, setShowDesc] = useState(true);
   const [infoOpen, setInfoOpen] = useState(true);
+  const [view, setView] = useState("grid"); // "grid" | "diagram"
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const [focusCol, setFocusCol] = useState(null);
@@ -1099,12 +1101,25 @@ export default function WorkflowCapture({
         </div>
       </div>
 
-      {/* ---------- Capture grid ---------- */}
+      {/* ---------- Capture grid / Tree diagram ---------- */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
-        <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>Capture grid</h2>
-        <Btn onClick={addColumn}>+ Add step</Btn>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>{view === "grid" ? "Capture grid" : "Tree diagram"}</h2>
+          <div style={{ display: "inline-flex", border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
+            {[["grid", "Grid"], ["diagram", "Tree diagram"]].map(([v, lbl]) => (
+              <button key={v} onClick={() => setView(v)} style={{
+                fontFamily: SANS, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none",
+                padding: "6px 12px", background: view === v ? ACCENT : "transparent", color: view === v ? "#FDFCFA" : MUTED,
+              }}>{lbl}</button>
+            ))}
+          </div>
+        </div>
+        {view === "grid" && <Btn onClick={addColumn}>+ Add step</Btn>}
       </div>
 
+      {view === "diagram" ? (
+        <WorkflowDiagram flows={flows} decisions={decisions} />
+      ) : (<>
       {/* Flow tabs: main flow + branch sub-flows */}
       <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10, flexWrap: "wrap", borderBottom: `1px solid ${BORDER}`, paddingBottom: 2 }}>
         {flows.map((f) => {
@@ -1287,8 +1302,9 @@ export default function WorkflowCapture({
       </div>
 
       <p style={{ fontSize: 11.5, color: MUTED, marginTop: 10 }}>
-        Tip: flip the <span style={{ fontWeight: 600 }}>Descriptions</span> toggle to pin a column explaining each field. Use a cell's <span style={{ fontWeight: 600 }}>✚</span> to log a decision pinned to that cell — it lands in the decisions section below.
+        Tip: use the <span style={{ fontWeight: 600 }}>Description</span> column's chevron to collapse it. Use a cell's <span style={{ fontWeight: 600 }}>✚</span> to log a decision pinned to that cell, and a <span style={{ fontWeight: 600 }}>Branches</span> cell to create or link a sub-flow.
       </p>
+      </>)}
 
       {/* ---------- Decisions section ---------- */}
       <div style={{ marginTop: 30 }}>
