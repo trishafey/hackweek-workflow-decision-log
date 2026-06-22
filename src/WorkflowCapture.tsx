@@ -573,6 +573,7 @@ export default function WorkflowCapture({
     init.decisions.reduce((m, x) => Math.max(m, (parseInt(String(x.id).replace(/\D/g, ""), 10) || 0) + 1), 1));
   const [showPreview, setShowPreview] = useState(false);
   const [showDesc, setShowDesc] = useState(true);
+  const [infoOpen, setInfoOpen] = useState(true);
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const [focusCol, setFocusCol] = useState(null);
@@ -931,7 +932,7 @@ export default function WorkflowCapture({
     color: MUTED, fontFamily: SANS, marginBottom: 3, display: "block",
   };
   const inputStyle = {
-    width: "100%", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 9px",
+    width: "100%", minWidth: 0, maxWidth: "100%", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 9px",
     fontSize: 13, fontFamily: SANS, color: INK, background: "#FDFCFA", outline: "none", boxSizing: "border-box",
   };
 
@@ -990,8 +991,11 @@ export default function WorkflowCapture({
 
       {/* ---------- Workflow info card ---------- */}
       <div style={{ background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "18px 20px", marginBottom: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-        <h2 style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 600, margin: "0 0 14px", color: INK }}>Workflow info</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
+        <h2 onClick={() => setInfoOpen((v) => !v)} style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 600, margin: infoOpen ? "0 0 14px" : 0, color: INK, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
+          <span style={{ color: ACCENT, fontSize: 14, fontFamily: SANS, transform: infoOpen ? "none" : "rotate(-90deg)", transition: "transform .15s" }}>▾</span>
+          Workflow info
+        </h2>
+        <div style={{ display: infoOpen ? "grid" : "none", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
           {INFO_FIELDS.map((f) => (
             <div key={f.key}>
               <label style={labelStyle}>{f.label}</label>

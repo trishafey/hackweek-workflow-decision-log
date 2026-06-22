@@ -95,32 +95,47 @@ function RowMenu({ archived, onArchive, onDelete }) {
   );
 }
 
-function LogsHome({ logs, onOpen, onCreate, onWorkflows, onArchive, onDelete }) {
+function HomeNav({ active, onLogs, onWorkflows }) {
+  return (
+    <nav className="home-nav" aria-label="Primary">
+      <button className={"home-nav-link" + (active === "logs" ? " active" : "")} onClick={onLogs}>Decision Logs</button>
+      <button className={"home-nav-link" + (active === "workflows" ? " active" : "")} onClick={onWorkflows}>Workflows</button>
+    </nav>
+  );
+}
+
+function LogsHome({ logs, onOpen, onCreate, onWorkflows, onLogs, onArchive, onDelete }) {
   const [creating, setCreating] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [q, setQ] = useState("");
   const archivedCount = logs.filter((l) => l.archived).length;
   const viewingArchived = showArchived && archivedCount > 0;
-  const rows = logs.filter((l) => (viewingArchived ? l.archived : !l.archived));
+  const needle = q.trim().toLowerCase();
+  const scope = logs.filter((l) => (viewingArchived ? l.archived : !l.archived));
+  const rows = needle ? scope.filter((l) => `${l.title} ${l.product} ${l.owner}`.toLowerCase().includes(needle)) : scope;
   return (
     <div className="home-root">
       <style>{HOME_CSS}</style>
+      <HomeNav active="logs" onLogs={onLogs} onWorkflows={onWorkflows} />
       <header className="home-head">
         <div>
           <h1>Decision Logs</h1>
           <p>Every decision log across the project — what was decided, and why.</p>
         </div>
         <div className="home-head-actions">
-          <button className="hm-link" onClick={onWorkflows}>Workflows →</button>
           <button className="hm-btn primary lg" onClick={() => setCreating(true)}>+ New decision log</button>
         </div>
       </header>
-      {archivedCount > 0 && (
-        <div className="home-archive-row">
+      <div className="home-search-row">
+        <input className="home-search" value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder="Search decision logs by name, product, or owner…" />
+        <span className="home-count">{rows.length} of {scope.length}</span>
+        {archivedCount > 0 && (
           <button className="hm-link" onClick={() => setShowArchived((v) => !v)}>
             {viewingArchived ? "← Back to active" : `View archived (${archivedCount})`}
           </button>
-        </div>
-      )}
+        )}
+      </div>
       <div className="home-table-wrap">
         <table className="home-tbl">
           <thead>
@@ -128,7 +143,7 @@ function LogsHome({ logs, onOpen, onCreate, onWorkflows, onArchive, onDelete }) 
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={6} className="home-empty">{viewingArchived ? "No archived logs." : "No decision logs yet."}</td></tr>
+              <tr><td colSpan={6} className="home-empty">{needle ? `No decision logs match “${q}”.` : (viewingArchived ? "No archived logs." : "No decision logs yet.")}</td></tr>
             )}
             {rows.map((l) => {
               const s = summarize(l.entries);
@@ -215,7 +230,7 @@ function CreateWorkflowModal({ onClose, onCreate }) {
 /*  Workflows home (searchable index)                                 */
 /* ------------------------------------------------------------------ */
 
-function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onArchive, onDelete }) {
+function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onWorkflows, onArchive, onDelete }) {
   const [creating, setCreating] = useState(false);
   const [q, setQ] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -229,13 +244,13 @@ function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onArchive, onDelet
   return (
     <div className="home-root">
       <style>{HOME_CSS}</style>
+      <HomeNav active="workflows" onLogs={onLogs} onWorkflows={onWorkflows} />
       <header className="home-head">
         <div>
           <h1>Workflows</h1>
           <p>Captured workflows — steps, people, exceptions, and where AI fits.</p>
         </div>
         <div className="home-head-actions">
-          <button className="hm-link" onClick={onLogs}>Decision logs →</button>
           <button className="hm-btn primary lg" onClick={() => setCreating(true)}>+ New workflow</button>
         </div>
       </header>
@@ -441,12 +456,12 @@ export default function App() {
   }
 
   if (route.view === "workflows") {
-    return <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={() => setRoute({ view: "logs" })} onArchive={setWorkflowArchived} onDelete={deleteWorkflow} />;
+    return <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={() => setRoute({ view: "logs" })} onWorkflows={() => setRoute({ view: "workflows" })} onArchive={setWorkflowArchived} onDelete={deleteWorkflow} />;
   }
 
   if (route.view === "log") {
     const log = logs.find((l) => l.id === route.id);
-    if (!log) return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onArchive={setLogArchived} onDelete={deleteLog} />;
+    if (!log) return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} />;
     return (
       <DecisionLog
         key={log.id}
@@ -459,7 +474,7 @@ export default function App() {
     );
   }
 
-  return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onArchive={setLogArchived} onDelete={deleteLog} />;
+  return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -478,6 +493,11 @@ const HOME_CSS = `
   -webkit-font-smoothing:antialiased;
 }
 .home-root *{box-sizing:border-box}
+.home-nav{display:flex;gap:18px;align-items:center;margin-bottom:24px;border-bottom:1px solid var(--line)}
+.home-nav-link{font-family:inherit;font-size:14px;font-weight:600;color:var(--ink-faint);background:none;
+  border:none;border-bottom:2px solid transparent;padding:6px 2px 10px;cursor:pointer;transition:color .12s}
+.home-nav-link:hover{color:var(--ink)}
+.home-nav-link.active{color:var(--accent);border-bottom-color:var(--accent)}
 .home-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
 .home-head h1{font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif;font-weight:600;
   letter-spacing:-.01em;margin:0;font-size:32px;line-height:1.1}
