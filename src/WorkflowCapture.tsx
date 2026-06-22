@@ -563,14 +563,65 @@ export default function WorkflowCapture({
 }) {
   const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
   const [info, setInfo] = useState(init.info);
-  const [columns, setColumns] = useState(init.columns);
-  const [cells, setCells] = useState(init.cells);
-  const [subflows, setSubflows] = useState(init.subflows);
+  // A workflow has multiple flows: the main flow + branch sub-flows. The grid
+  // edits the ACTIVE flow; tabs switch between them. Decisions are workflow-level
+  // and carry a flowId on their anchor.
+  const [flows, setFlows] = useState(() => (init.flows && init.flows.length) ? init.flows : [{
+    id: "main",
+    name: "Main flow",
+    columns: init.columns,
+    cells: init.cells,
+    subflows: init.subflows || {},
+    nextId: init.columns.reduce((m, c) => Math.max(m, (parseInt(String(c.id).replace(/\D/g, ""), 10) || 0) + 1), 0),
+  }]);
+  const [activeFlowId, setActiveFlowId] = useState("main");
+  const flowSeqRef = useRef(1);
+  const activeFlow = flows.find((f) => f.id === activeFlowId) || flows[0];
+  const columns = activeFlow.columns;
+  const cells = activeFlow.cells;
+  const subflows = activeFlow.subflows;
+  const nextId = activeFlow.nextId;
+  const updateFlow = (id, patch) =>
+    setFlows((fs) => fs.map((f) => (f.id === id ? { ...f, ...(typeof patch === "function" ? patch(f) : patch) } : f)));
+  const setColumns = (u) => updateFlow(activeFlowId, (f) => ({ columns: typeof u === "function" ? u(f.columns) : u }));
+  const setCells = (u) => updateFlow(activeFlowId, (f) => ({ cells: typeof u === "function" ? u(f.cells) : u }));
+  const setSubflows = (u) => updateFlow(activeFlowId, (f) => ({ subflows: typeof u === "function" ? u(f.subflows) : u }));
+  const setNextId = (u) => updateFlow(activeFlowId, (f) => ({ nextId: typeof u === "function" ? u(f.nextId) : u }));
+  const flowName = (id) => flows.find((f) => f.id === id)?.name;
+  const flowColumns = (id) => flows.find((f) => f.id === id)?.columns || [];
+
+  // ----- Sub-flow (branch) management -----
+  const newFlowId = () => "flow-" + (flowSeqRef.current++);
+  const createSubFlowFromBranch = (colId, text) => {
+    const sourceId = activeFlowId;
+    const nm = ((text || "").split("\n")[0].trim().slice(0, 32)) || ("Branch " + flows.length);
+    const id = newFlowId();
+    setFlows((fs) =>
+      fs.map((f) => (f.id === sourceId ? { ...f, subflows: { ...f.subflows, [colId]: id } } : f))
+        .concat([{ id, name: nm, columns: [{ id: "c0", name: "Trigger" }, { id: "c1", name: "Step 1" }], cells: {}, subflows: {}, nextId: 2 }]));
+    setActiveFlowId(id);
+    flash(`Created sub-flow "${nm}"`);
+  };
+  const linkBranchToFlow = (colId, targetId) =>
+    updateFlow(activeFlowId, (f) => ({ subflows: { ...f.subflows, [colId]: targetId } }));
+  const unlinkBranch = (colId) =>
+    updateFlow(activeFlowId, (f) => { const n = { ...f.subflows }; delete n[colId]; return { subflows: n }; });
+  const renameFlow = (id, name) => updateFlow(id, { name });
+  const deleteFlow = (id) => {
+    if (id === "main") return;
+    setFlows((fs) => fs
+      .filter((f) => f.id !== id)
+      .map((f) => {
+        const sf = { ...f.subflows };
+        for (const k of Object.keys(sf)) if (sf[k] === id) delete sf[k];
+        return { ...f, subflows: sf };
+      }));
+    setActiveFlowId((cur) => (cur === id ? "main" : cur));
+  };
+
   const [decisions, setDecisions] = useState(init.decisions);
-  const [nextId, setNextId] = useState(() =>
-    init.columns.reduce((m, c) => Math.max(m, (parseInt(String(c.id).replace(/\D/g, ""), 10) || 0) + 1), 0));
   const decIdRef = useRef(
-    init.decisions.reduce((m, x) => Math.max(m, (parseInt(String(x.id).replace(/\D/g, ""), 10) || 0) + 1), 1));
+    (init.decisions || []).reduce((m, x) => Math.max(m, (parseInt(String(x.id).replace(/\D/g, ""), 10) || 0) + 1), 1));
   const [showPreview, setShowPreview] = useState(false);
   const [showDesc, setShowDesc] = useState(true);
   const [infoOpen, setInfoOpen] = useState(true);
@@ -662,13 +713,14 @@ export default function WorkflowCapture({
       workflowStep: col.name,
       subject: row.label,
       context: (cells[col.id]?.[row.key] || "").trim(),
-      anchor: { colId: col.id, rowKey: row.key },
+      anchor: { flowId: activeFlowId, colId: col.id, rowKey: row.key },
     });
     flash(`Decision logged for ${col.name} · ${row.label}`);
   };
 
+  // Decisions anchored to a cell in the *active* flow (anchors w/o flowId = main).
   const cellDecisions = (colId, rowKey) =>
-    decisions.filter((d) => d.anchor && d.anchor.colId === colId && d.anchor.rowKey === rowKey);
+    decisions.filter((d) => d.anchor && (d.anchor.flowId || "main") === activeFlowId && d.anchor.colId === colId && d.anchor.rowKey === rowKey);
 
   const jumpToDecision = (id) => {
     setHighlightId(id);
@@ -676,17 +728,21 @@ export default function WorkflowCapture({
     setTimeout(() => setHighlightId(null), 2200);
   };
 
-  // Scroll to the grid cell a decision is anchored to ("link to comment row").
+  // Scroll to the grid cell a decision is anchored to (switching flows if needed).
   const jumpToAnchor = (anchor) => {
     if (!anchor) return;
+    const fid = anchor.flowId || "main";
+    if (fid !== activeFlowId) setActiveFlowId(fid);
     setFocusCol(anchor.colId);
-    document.getElementById(`wfcell-${anchor.colId}-${anchor.rowKey}`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "center" });
+    setTimeout(() => {
+      document.getElementById(`wfcell-${anchor.colId}-${anchor.rowKey}`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "center" });
+    }, fid !== activeFlowId ? 80 : 0);
     setTimeout(() => setFocusCol(null), 2600);
   };
 
   const anchorLabel = (d) => {
     if (!d.anchor) return null;
-    const col = columns.find((c) => c.id === d.anchor.colId);
+    const col = flowColumns(d.anchor.flowId || "main").find((c) => c.id === d.anchor.colId);
     const row = ROWS.find((r) => r.key === d.anchor.rowKey);
     if (!col || !row) return null;
     return `${col.name} · ${row.label}`;
@@ -884,7 +940,7 @@ export default function WorkflowCapture({
   const exportWorkflow = () => {
     download(
       `workflow-${slug(info.workflow)}.json`,
-      JSON.stringify({ kind: "workflow-capture", version: 2, info, columns, cells, subflows, decisions }, null, 2)
+      JSON.stringify({ kind: "workflow-capture", version: 3, info, flows, decisions }, null, 2)
     );
     flash("Workflow exported");
   };
@@ -894,17 +950,22 @@ export default function WorkflowCapture({
     r.onload = () => {
       try {
         const d = JSON.parse(r.result);
-        if (!d.columns || !d.cells) throw new Error("bad file");
+        // v3: { flows }. Older exports: { columns, cells, subflows } -> wrap as main.
+        let nextFlows;
+        if (Array.isArray(d.flows) && d.flows.length) {
+          nextFlows = d.flows;
+        } else if (d.columns && d.cells) {
+          nextFlows = [{
+            id: "main", name: "Main flow", columns: d.columns, cells: d.cells, subflows: d.subflows || {},
+            nextId: d.columns.reduce((m, c) => Math.max(m, (parseInt(String(c.id).replace(/\D/g, ""), 10) || 0) + 1), 0),
+          }];
+        } else {
+          throw new Error("bad file");
+        }
         setInfo(d.info || {});
-        setColumns(d.columns);
-        setCells(d.cells);
-        setSubflows(d.subflows || {});
+        setFlows(nextFlows);
+        setActiveFlowId(nextFlows[0].id);
         setDecisions(d.decisions || []);
-        const maxC = d.columns.reduce((m, c) => {
-          const n = parseInt(String(c.id).replace(/\D/g, ""), 10);
-          return isNaN(n) ? m : Math.max(m, n + 1);
-        }, 0);
-        setNextId(maxC);
         decIdRef.current = (d.decisions || []).reduce((m, x) => {
           const n = parseInt(String(x.id).replace(/\D/g, ""), 10);
           return isNaN(n) ? m : Math.max(m, n + 1);
@@ -1035,6 +1096,29 @@ export default function WorkflowCapture({
         <Btn onClick={addColumn}>+ Add step</Btn>
       </div>
 
+      {/* Flow tabs: main flow + branch sub-flows */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10, flexWrap: "wrap", borderBottom: `1px solid ${BORDER}`, paddingBottom: 2 }}>
+        {flows.map((f) => {
+          const active = f.id === activeFlowId;
+          return (
+            <span key={f.id} style={{ display: "inline-flex", alignItems: "center" }}>
+              <button onClick={() => setActiveFlowId(f.id)} style={{
+                fontFamily: SANS, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                background: active ? ACCENT_SOFT : "transparent", color: active ? ACCENT : MUTED,
+                border: "none", borderBottom: `2px solid ${active ? ACCENT : "transparent"}`,
+                borderRadius: "6px 6px 0 0", padding: "7px 12px",
+              }}>{f.name}</button>
+              {f.id !== "main" && active && (
+                <button onClick={() => { if (window.confirm(`Delete sub-flow "${f.name}"?`)) deleteFlow(f.id); }}
+                  title="Delete sub-flow" style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 13, padding: "0 4px" }}>×</button>
+              )}
+            </span>
+          );
+        })}
+        <button onClick={() => { const id = newFlowId(); setFlows((fs) => [...fs, { id, name: "Sub-flow " + fs.length, columns: [{ id: "c0", name: "Trigger" }, { id: "c1", name: "Step 1" }], cells: {}, subflows: {}, nextId: 2 }]); setActiveFlowId(id); }}
+          style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: ACCENT, background: "transparent", border: "none", cursor: "pointer", padding: "7px 10px" }}>+ Sub-flow</button>
+      </div>
+
       <div style={{ overflowX: "auto", border: `1px solid ${BORDER}`, borderRadius: 14, background: CARD_BG, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: 220 + (showDesc ? DESC_W : 34) + columns.length * 260 }}>
           <thead>
@@ -1119,7 +1203,8 @@ export default function WorkflowCapture({
                   {columns.map((col, ci) => {
                     const val = cells[col.id]?.[row.key] || "";
                     const isBranch = row.key === "branches";
-                    const marked = isBranch && subflows[col.id] && val.trim();
+                    const linkedFlowId = isBranch ? subflows[col.id] : null;
+                    const linkedFlow = linkedFlowId ? flows.find((f) => f.id === linkedFlowId) : null;
                     const attached = cellDecisions(col.id, row.key);
                     return (
                       <td key={col.id} id={`wfcell-${col.id}-${row.key}`} style={{
@@ -1153,16 +1238,33 @@ export default function WorkflowCapture({
                           </div>
                         )}
                         {isBranch && val.trim() && (
-                          <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                            {marked ? <Pill tone="outline">↳ linked sub-flow</Pill> : null}
-                            <button onClick={() => setSubflows((p) => ({ ...p, [col.id]: !p[col.id] }))}
-                              style={{
-                                border: "none", background: "transparent", color: MUTED,
-                                fontSize: 10.5, cursor: "pointer", padding: 0, fontFamily: SANS,
-                                textDecoration: "underline", textUnderlineOffset: 2,
-                              }}>
-                              {marked ? "unmark" : "mark as linked sub-flow"}
-                            </button>
+                          <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            {linkedFlow ? (
+                              <>
+                                <button onClick={() => setActiveFlowId(linkedFlow.id)} style={{
+                                  border: `1px solid ${ACCENT}`, background: ACCENT_SOFT, color: ACCENT, borderRadius: 999,
+                                  fontSize: 10.5, fontWeight: 600, cursor: "pointer", padding: "2px 9px", fontFamily: SANS,
+                                }}>↳ {linkedFlow.name}</button>
+                                <button onClick={() => unlinkBranch(col.id)} style={{
+                                  border: "none", background: "transparent", color: MUTED, fontSize: 10.5, cursor: "pointer",
+                                  padding: 0, fontFamily: SANS, textDecoration: "underline", textUnderlineOffset: 2,
+                                }}>unlink</button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => createSubFlowFromBranch(col.id, val)} style={{
+                                  border: `1px solid ${BORDER}`, background: CARD_BG, color: ACCENT, borderRadius: 7,
+                                  fontSize: 10.5, fontWeight: 600, cursor: "pointer", padding: "3px 9px", fontFamily: SANS,
+                                }}>+ Create sub-flow</button>
+                                {flows.filter((f) => f.id !== activeFlowId).length > 0 && (
+                                  <select defaultValue="" onChange={(e) => { if (e.target.value) linkBranchToFlow(col.id, e.target.value); }}
+                                    style={{ fontFamily: SANS, fontSize: 10.5, color: MUTED, background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 7, padding: "3px 6px", cursor: "pointer" }}>
+                                    <option value="">Link existing…</option>
+                                    {flows.filter((f) => f.id !== activeFlowId).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                  </select>
+                                )}
+                              </>
+                            )}
                           </div>
                         )}
                       </td>
