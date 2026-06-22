@@ -560,6 +560,7 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, onJu
 export default function WorkflowCapture({
   initial, focusStep, onWorkflowsHome, projectLinks = [],
   logsIndex = [], existingLogCodes = [], onCreateLog, onAddToLog, onUpdateLogEntries, onOpenLog,
+  onContentChange,
 }) {
   const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
   const [info, setInfo] = useState(init.info);
@@ -638,6 +639,14 @@ export default function WorkflowCapture({
   const [links, setLinks] = useState(projectLinks || []);
   const [linkDraft, setLinkDraft] = useState(null); // { label, url } when the add-link modal is open
   const fileRef = useRef(null);
+
+  // Report content up (debounced) so the App can persist it to the database.
+  useEffect(() => {
+    if (!onContentChange) return;
+    const t = setTimeout(() => onContentChange({ info, flows, decisions, links }), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [info, flows, decisions, links]);
 
   useEffect(() => {
     const l = document.createElement("link");

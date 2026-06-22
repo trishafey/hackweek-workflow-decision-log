@@ -376,6 +376,14 @@ export default function App() {
   const deleteLog = (id) => setLogs((ls) => ls.filter((l) => l.id !== id));
   const setWorkflowArchived = (id, archived) => setWorkflows((ws) => ws.map((w) => (w.id === id ? { ...w, archived } : w)));
   const deleteWorkflow = (id) => setWorkflows((ws) => ws.filter((w) => w.id !== id));
+  // Persist a workflow's capture content (info + flows + decisions + links) and
+  // refresh its step count / updated date for the index.
+  const updateWorkflowContent = (id, content) =>
+    setWorkflows((ws) => ws.map((w) => {
+      if (w.id !== id) return w;
+      const mainFlow = (content.flows || []).find((f) => f.id === "main") || (content.flows || [])[0];
+      return { ...w, content, steps: mainFlow ? mainFlow.columns.length : w.steps, updated: TODAY };
+    }));
 
   // Creates a log and returns its id without navigating (used by the
   // workflow page's "Add to Decision Log" flow).
@@ -437,14 +445,16 @@ export default function App() {
 
   if (route.view === "workflow") {
     const wf = workflows.find((w) => w.id === route.id);
-    const initial = wf && wf.seed === "outfit" ? undefined : blankWorkflow(wf?.name, wf?.product, wf?.owner);
+    // Prefer saved content; else seed (outfit) or a blank workflow.
+    const initial = wf?.content ?? (wf && wf.seed === "outfit" ? undefined : blankWorkflow(wf?.name, wf?.product, wf?.owner));
     return (
       <WorkflowCapture
         key={route.id}
         initial={initial}
-        projectLinks={wf?.projectLinks || []}
+        projectLinks={wf?.content?.links ?? wf?.projectLinks ?? []}
         focusStep={route.focusStep}
         onWorkflowsHome={() => setRoute({ view: "workflows" })}
+        onContentChange={(content) => updateWorkflowContent(route.id, content)}
         logsIndex={logs.map((l) => ({ id: l.id, title: l.title, code: `${l.settings.prefix}-${l.settings.workflow}` }))}
         existingLogCodes={logs.map((l) => `${l.settings.prefix}-${l.settings.workflow}`.toUpperCase())}
         onCreateLog={createLogSilent}
