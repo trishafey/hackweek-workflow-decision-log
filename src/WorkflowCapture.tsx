@@ -656,6 +656,7 @@ export default function WorkflowCapture({
   const [showDesc, setShowDesc] = useState(true);
   const [infoOpen, setInfoOpen] = useState(true);
   const [view, setView] = useState("grid"); // "grid" | "diagram"
+  const [infoEditing, setInfoEditing] = useState(false); // Workflow info: view (static) vs edit
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const [focusCol, setFocusCol] = useState(null);
@@ -1048,8 +1049,20 @@ export default function WorkflowCapture({
     fontSize: 12.5, color: ACCENT, cursor: "pointer", fontWeight: 600,
   };
 
+  const fmtDate = (s) => {
+    if (!s) return "";
+    const d = new Date(s + "T00:00:00");
+    return isNaN(d.getTime()) ? s : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  };
+  const staticVal = { fontFamily: SANS, fontSize: 13, color: INK, padding: "7px 0", minHeight: 20, lineHeight: 1.4, wordBreak: "break-word" };
+
   return (
     <div style={{ minHeight: "100vh", background: BASE_BG, color: INK, padding: "28px 28px 60px", fontFamily: SANS }}>
+      <style>{`
+        input.wf-date{ -webkit-appearance:none; -moz-appearance:none; appearance:none; width:100%; min-width:0; box-sizing:border-box; }
+        input.wf-date::-webkit-date-and-time-value{ text-align:left; margin:0; }
+        input.wf-date::-webkit-calendar-picker-indicator{ margin-left:auto; opacity:.55; cursor:pointer; }
+      `}</style>
       {/* ---------- Breadcrumb ---------- */}
       {onWorkflowsHome && (
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16, fontSize: 12.5, flexWrap: "wrap" }}>
@@ -1094,39 +1107,86 @@ export default function WorkflowCapture({
         <h2 onClick={() => setInfoOpen((v) => !v)} style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 600, margin: infoOpen ? "0 0 14px" : 0, color: INK, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
           <span style={{ color: ACCENT, fontSize: 14, fontFamily: SANS, transform: infoOpen ? "none" : "rotate(-90deg)", transition: "transform .15s" }}>▾</span>
           Workflow info
+          <span style={{ flex: 1 }} />
+          {infoEditing ? (
+            <Btn small primary onClick={(e) => { e.stopPropagation(); setInfoEditing(false); flash("Workflow info saved"); }}>Save</Btn>
+          ) : (
+            <button onClick={(e) => { e.stopPropagation(); setInfoOpen(true); setInfoEditing(true); }} title="Edit workflow info" style={{
+              fontFamily: SANS, fontSize: 12, fontWeight: 600, color: MUTED, background: "transparent",
+              border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 10px", cursor: "pointer",
+            }}>✎ Edit</button>
+          )}
         </h2>
-        <div style={{ display: infoOpen ? "grid" : "none", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
-          {INFO_FIELDS.map((f) => (
-            <div key={f.key}>
-              <label style={labelStyle}>{f.label}</label>
-              {f.key === "logLink" ? (
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type={f.type || "text"} value={info[f.key] || ""} style={{ ...inputStyle, flex: 1 }}
+
+        {infoOpen && (infoEditing ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
+            {INFO_FIELDS.map((f) => (
+              <div key={f.key}>
+                <label style={labelStyle}>{f.label}</label>
+                {f.key === "logLink" ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input type={f.type || "text"} value={info[f.key] || ""} style={{ ...inputStyle, flex: 1 }}
+                      onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
+                    <Btn small onClick={() => setLinkDraft({ label: "", url: "" })}>+ add links</Btn>
+                  </div>
+                ) : f.type === "date" ? (
+                  <input className="wf-date" type="date" value={info[f.key] || ""} style={inputStyle}
+                    onClick={(e) => { try { e.currentTarget.showPicker && e.currentTarget.showPicker(); } catch { /* not supported */ } }}
                     onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
-                  <Btn small onClick={() => setLinkDraft({ label: "", url: "" })}>+ add links</Btn>
+                ) : (
+                  <input type={f.type || "text"} value={info[f.key] || ""} style={inputStyle}
+                    onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
+                )}
+                {f.key === "logLink" && links.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                    {links.map((pl, i) => (
+                      <span key={i} style={{
+                        display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
+                        color: ACCENT, background: ACCENT_SOFT, padding: "3px 6px 3px 9px", borderRadius: 999, fontFamily: SANS,
+                      }}>
+                        <a href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{ display: "inline-flex", alignItems: "center", gap: 4, color: ACCENT, textDecoration: "none" }}><LinkGlyph />{pl.label || pl.url}</a>
+                        <button onClick={() => setLinks(links.filter((_, idx) => idx !== i))} title="Remove" style={{
+                          border: "none", background: "none", color: ACCENT, cursor: "pointer", fontSize: 12, lineHeight: 1, padding: 0,
+                        }}>✕</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
+            {INFO_FIELDS.map((f) => {
+              const v = info[f.key] || "";
+              const isUrl = /^https?:\/\//i.test(v.trim());
+              return (
+                <div key={f.key}>
+                  <label style={labelStyle}>{f.label}</label>
+                  {f.key === "logLink" ? (
+                    <div>
+                      <div style={staticVal}>
+                        {v ? (isUrl ? <a href={v} target="_blank" rel="noopener noreferrer" style={{ color: ACCENT, textDecoration: "none" }}>{v}</a> : v) : <span style={{ color: MUTED }}>—</span>}
+                      </div>
+                      {links.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                          {links.map((pl, i) => (
+                            <a key={i} href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{
+                              display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600,
+                              color: ACCENT, background: ACCENT_SOFT, padding: "3px 9px", borderRadius: 999, textDecoration: "none", fontFamily: SANS,
+                            }}><LinkGlyph />{pl.label || pl.url}</a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={staticVal}>{v ? (f.type === "date" ? fmtDate(v) : v) : <span style={{ color: MUTED }}>—</span>}</div>
+                  )}
                 </div>
-              ) : (
-                <input type={f.type || "text"} value={info[f.key] || ""} style={inputStyle}
-                  onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
-              )}
-              {f.key === "logLink" && links.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                  {links.map((pl, i) => (
-                    <span key={i} style={{
-                      display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
-                      color: ACCENT, background: ACCENT_SOFT, padding: "3px 6px 3px 9px", borderRadius: 999, fontFamily: SANS,
-                    }}>
-                      <a href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{ display: "inline-flex", alignItems: "center", gap: 4, color: ACCENT, textDecoration: "none" }}><LinkGlyph />{pl.label || pl.url}</a>
-                      <button onClick={() => setLinks(links.filter((_, idx) => idx !== i))} title="Remove" style={{
-                        border: "none", background: "none", color: ACCENT, cursor: "pointer", fontSize: 12, lineHeight: 1, padding: 0,
-                      }}>✕</button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       {/* ---------- Capture grid / Tree diagram ---------- */}
