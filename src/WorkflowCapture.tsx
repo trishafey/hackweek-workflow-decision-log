@@ -1168,7 +1168,7 @@ export default function WorkflowCapture({
           <h1 style={{ fontFamily: SERIF, fontWeight: 500, fontSize: 34, lineHeight: 1.1, margin: 0, color: ACCENT, letterSpacing: "-0.01em" }}>
             Workflow: {info.workflow || "Untitled workflow"}
           </h1>
-          <p style={{ margin: "6px 0 0", fontSize: 13.5, color: MUTED, maxWidth: 560 }}>
+          <p style={{ margin: "6px 0 0", fontSize: 13.5, color: MUTED }}>
             Capture the steps, the people, the exceptions — and where AI could fit — while the nuance is still in the room.
           </p>
           {links.length > 0 && (
@@ -1196,7 +1196,6 @@ export default function WorkflowCapture({
       {/* ---------- Workflow info card ---------- */}
       <div style={{ background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "18px 20px", marginBottom: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
         <h2 onClick={() => setInfoOpen((v) => !v)} style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 600, margin: infoOpen ? "0 0 14px" : 0, color: INK, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
-          <span style={{ color: ACCENT, fontSize: 14, fontFamily: SANS, transform: infoOpen ? "none" : "rotate(-90deg)", transition: "transform .15s" }}>▾</span>
           Workflow info
           <span style={{ flex: 1 }} />
           {infoEditing ? (
@@ -1207,6 +1206,7 @@ export default function WorkflowCapture({
               border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 10px", cursor: "pointer",
             }}>✎ Edit</button>
           )}
+          <span style={{ color: ACCENT, fontSize: 14, fontFamily: SANS, transform: infoOpen ? "none" : "rotate(-90deg)", transition: "transform .15s" }}>▾</span>
         </h2>
 
         {infoOpen && (infoEditing ? (
@@ -1249,27 +1249,31 @@ export default function WorkflowCapture({
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
             {INFO_FIELDS.map((f) => {
-              const v = info[f.key] || "";
-              const isUrl = /^https?:\/\//i.test(v.trim());
+              const v = (info[f.key] || "").trim();
+              const isUrl = /^https?:\/\//i.test(v);
+              const linkPill = (url, label) => (
+                <a href={url} target="_blank" rel="noopener noreferrer" title={url} style={{
+                  display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600,
+                  color: ACCENT, background: ACCENT_SOFT, padding: "3px 9px", borderRadius: 999, textDecoration: "none", fontFamily: SANS, maxWidth: "100%",
+                }}>
+                  <LinkGlyph />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                </a>
+              );
               return (
                 <div key={f.key}>
                   <label style={labelStyle}>{f.label}</label>
                   {f.key === "logLink" ? (
-                    <div>
-                      <div style={staticVal}>
-                        {v ? (isUrl ? <a href={v} target="_blank" rel="noopener noreferrer" style={{ color: ACCENT, textDecoration: "none" }}>{v}</a> : v) : <span style={{ color: MUTED }}>—</span>}
+                    (isUrl || links.length > 0) ? (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
+                        {isUrl && linkPill(v, "Decision log")}
+                        {links.map((pl, i) => <span key={i}>{linkPill(pl.url, pl.label || pl.url)}</span>)}
                       </div>
-                      {links.length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                          {links.map((pl, i) => (
-                            <a key={i} href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{
-                              display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600,
-                              color: ACCENT, background: ACCENT_SOFT, padding: "3px 9px", borderRadius: 999, textDecoration: "none", fontFamily: SANS,
-                            }}><LinkGlyph />{pl.label || pl.url}</a>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    ) : (
+                      <div style={staticVal}>{v || <span style={{ color: MUTED }}>—</span>}</div>
+                    )
+                  ) : isUrl ? (
+                    <div style={{ marginTop: 2 }}>{linkPill(v, v.replace(/^https?:\/\//i, ""))}</div>
                   ) : (
                     <div style={staticVal}>{v ? (f.type === "date" ? fmtDate(v) : v) : <span style={{ color: MUTED }}>—</span>}</div>
                   )}
@@ -1542,7 +1546,7 @@ export default function WorkflowCapture({
         </table>
       </div>
         <button onClick={addColumn} title="Add step" style={{
-          flex: "0 0 60px", border: `2px dashed ${BORDER}`, borderRadius: 14, background: "transparent",
+          flex: "0 0 40px", border: `2px dashed ${BORDER}`, borderRadius: 14, background: "transparent",
           color: MUTED, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center",
           justifyContent: "center", gap: 6, fontFamily: SANS, fontSize: 13, fontWeight: 600,
         }}
