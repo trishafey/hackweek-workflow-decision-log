@@ -406,12 +406,16 @@ function Menu({ label, items, primary, disabled }) {
             background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 10,
             boxShadow: "0 8px 24px rgba(0,0,0,0.14)", minWidth: 180, overflow: "hidden",
           }}>
-            {items.map((it, i) => (
-              <button key={i} style={itemStyle} onClick={() => { setOpen(false); it.onClick(); }}
-                onMouseEnter={(e) => e.currentTarget.style.background = ACCENT_SOFT}
-                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-                {it.label}
-              </button>
+            {items.filter(Boolean).map((it, i) => (
+              it.divider ? (
+                <div key={i} style={{ borderTop: `1px solid ${BORDER}`, margin: "4px 0" }} />
+              ) : (
+                <button key={i} style={itemStyle} disabled={it.disabled} onClick={() => { setOpen(false); it.onClick(); }}
+                  onMouseEnter={(e) => { if (!it.disabled) e.currentTarget.style.background = ACCENT_SOFT; }}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                  {it.label}
+                </button>
+              )
             ))}
           </div>
         </>
@@ -1430,60 +1434,55 @@ export default function WorkflowCapture({
           <Pill tone="neutral">{decisions.length} logged</Pill>
           <span style={{ flex: 1 }} />
           {decisions.length > 0 && (
-            <>
+            <div style={{ position: "relative", width: 240 }}>
               <input value={decQuery} onChange={(e) => setDecQuery(e.target.value)} placeholder="Search decisions…"
-                style={{ width: 200, fontFamily: SANS, fontSize: 13, color: INK, background: CARD_BG,
-                  border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 11px", outline: "none" }} />
-              <div style={{ position: "relative" }}>
-                <button onClick={() => setFilterOpen((o) => !o)} title="Filters" style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center", width: 36, height: 34,
-                  borderRadius: 8, cursor: "pointer", background: filtersActive ? ACCENT_SOFT : CARD_BG,
-                  border: `1px solid ${filtersActive ? ACCENT : BORDER}`, color: filtersActive ? ACCENT : MUTED, position: "relative",
-                }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
-                  {filtersActive && <span style={{ position: "absolute", top: 5, right: 6, width: 6, height: 6, borderRadius: "50%", background: ACCENT }} />}
-                </button>
-                {filterOpen && (
-                  <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setFilterOpen(false)} />
-                    <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 95, background: CARD_BG,
-                      border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.14)", padding: 12, width: 220 }}>
-                      <label style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: MUTED, fontFamily: SANS }}>Status</label>
-                      <select value={decStatus} onChange={(e) => setDecStatus(e.target.value)} style={{ ...selectStyle, width: "100%", margin: "4px 0 12px" }}>
-                        <option>All</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
-                      </select>
-                      <label style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: MUTED, fontFamily: SANS }}>Workflow step</label>
-                      <select value={decStep} onChange={(e) => setDecStep(e.target.value)} style={{ ...selectStyle, width: "100%", margin: "4px 0 12px" }}>
-                        <option>All</option>{decSteps.map((s) => <option key={s}>{s}</option>)}
-                      </select>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: 11.5, color: MUTED }}>{decView.length} of {decisions.length}</span>
-                        <button onClick={() => { setDecStatus("All"); setDecStep("All"); }} disabled={!filtersActive} style={{
-                          fontFamily: SANS, fontSize: 11.5, fontWeight: 600, color: filtersActive ? ACCENT : MUTED,
-                          background: "none", border: "none", cursor: filtersActive ? "pointer" : "default", padding: 0,
-                        }}>Clear</button>
-                      </div>
+                style={{ width: "100%", fontFamily: SANS, fontSize: 13, color: INK, background: CARD_BG,
+                  border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 38px 8px 11px", outline: "none", boxSizing: "border-box" }} />
+              <button onClick={() => setFilterOpen((o) => !o)} title="Filters" style={{
+                position: "absolute", right: 5, top: "50%", transform: "translateY(-50%)",
+                display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28,
+                borderRadius: 6, cursor: "pointer", background: filtersActive ? ACCENT_SOFT : "transparent",
+                border: filtersActive ? `1px solid ${ACCENT}` : "1px solid transparent", color: filtersActive ? ACCENT : MUTED,
+              }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
+                {filtersActive && <span style={{ position: "absolute", top: 1, right: 1, width: 6, height: 6, borderRadius: "50%", background: ACCENT }} />}
+              </button>
+              {filterOpen && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setFilterOpen(false)} />
+                  <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 95, background: CARD_BG,
+                    border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.14)", padding: 12, width: 220 }}>
+                    <label style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: MUTED, fontFamily: SANS }}>Status</label>
+                    <select value={decStatus} onChange={(e) => setDecStatus(e.target.value)} style={{ ...selectStyle, width: "100%", margin: "4px 0 12px" }}>
+                      <option>All</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
+                    </select>
+                    <label style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: MUTED, fontFamily: SANS }}>Workflow step</label>
+                    <select value={decStep} onChange={(e) => setDecStep(e.target.value)} style={{ ...selectStyle, width: "100%", margin: "4px 0 12px" }}>
+                      <option>All</option>{decSteps.map((s) => <option key={s}>{s}</option>)}
+                    </select>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 11.5, color: MUTED }}>{decView.length} of {decisions.length}</span>
+                      <button onClick={() => { setDecStatus("All"); setDecStep("All"); }} disabled={!filtersActive} style={{
+                        fontFamily: SANS, fontSize: 11.5, fontWeight: 600, color: filtersActive ? ACCENT : MUTED,
+                        background: "none", border: "none", cursor: filtersActive ? "pointer" : "default", padding: 0,
+                      }}>Clear</button>
                     </div>
-                  </>
-                )}
-              </div>
-            </>
+                  </div>
+                </>
+              )}
+            </div>
           )}
           <Menu label="Export ▾" disabled={decisions.length === 0} items={[
-            { label: "Text (.txt)", onClick: () => requestExport("text") },
-            { label: "Excel (.csv)", onClick: () => requestExport("excel") },
-            { label: "JSON (.json)", onClick: () => requestExport("json") },
+            { label: "Export · Text (.txt)", onClick: () => requestExport("text") },
+            { label: "Export · Excel (.csv)", onClick: () => requestExport("excel") },
+            { label: "Export · JSON (.json)", onClick: () => requestExport("json") },
+            onAddToLog && { divider: true },
+            onAddToLog && { label: "Add to Decision Log", onClick: openAddToLog },
           ]} />
           <Btn onClick={() => setShowPreview(true)} disabled={pendingDecisions.length === 0}
             title={pendingDecisions.length === 0 ? "No AI pass-2 cells filled yet" : ""}>
             ✨ Decisions found{pendingDecisions.length > 0 ? ` (${pendingDecisions.length})` : ""}
           </Btn>
-          {onAddToLog && (
-            <Btn onClick={openAddToLog} disabled={decisions.length === 0}
-              title={decisions.length === 0 ? "No decisions to add yet" : "Send these decisions to a decision log"}>
-              Add to Decision Log
-            </Btn>
-          )}
           <Btn primary onClick={() => { newDecision({}); flash("Decision added"); }}>+ Add decision</Btn>
         </div>
         <p style={{ fontSize: 12.5, color: MUTED, margin: "0 0 14px", maxWidth: 640 }}>
