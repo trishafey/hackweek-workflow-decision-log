@@ -602,7 +602,14 @@ export default function WorkflowCapture({
     nextId: init.columns.reduce((m, c) => Math.max(m, (parseInt(String(c.id).replace(/\D/g, ""), 10) || 0) + 1), 0),
   }]);
   const [activeFlowId, setActiveFlowId] = useState("main");
-  const flowSeqRef = useRef(1);
+  // Seed the id counter past any existing flow ids so reloaded data never
+  // collides with freshly created sub-flows (which caused duplicate tabs).
+  const flowSeqRef = useRef(
+    ((init.flows && init.flows.length) ? init.flows : []).reduce((m, f) => {
+      const n = parseInt(String(f.id).replace(/\D/g, ""), 10);
+      return Number.isFinite(n) ? Math.max(m, n + 1) : m;
+    }, 1)
+  );
   const activeFlow = flows.find((f) => f.id === activeFlowId) || flows[0];
   const columns = activeFlow.columns;
   const cells = activeFlow.cells;
@@ -1322,21 +1329,40 @@ export default function WorkflowCapture({
       <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10, flexWrap: "wrap", borderBottom: `1px solid ${BORDER}`, paddingBottom: 2 }}>
         {flows.map((f) => {
           const active = f.id === activeFlowId;
+          const isSub = f.id !== "main";
           return (
-            <span key={f.id} style={{ display: "inline-flex", alignItems: "center" }}>
-              <button onClick={() => setActiveFlowId(f.id)} style={{
-                fontFamily: SANS, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                background: active ? ACCENT_SOFT : "transparent", color: active ? ACCENT : MUTED,
-                border: "none", borderBottom: `2px solid ${active ? ACCENT : "transparent"}`,
-                borderRadius: "6px 6px 0 0", padding: "7px 12px",
-              }}>{f.name}</button>
-              {f.id !== "main" && active && (
-                <>
-                  <button onClick={() => { const n = window.prompt("Rename sub-flow", f.name); if (n && n.trim()) renameFlow(f.id, n.trim()); }}
-                    title="Rename sub-flow" style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 12, padding: "0 2px" }}>✎</button>
-                  <button onClick={() => { if (window.confirm(`Delete sub-flow "${f.name}"?`)) deleteFlow(f.id); }}
-                    title="Delete sub-flow" style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 13, padding: "0 4px" }}>×</button>
-                </>
+            <span key={f.id} style={{
+              display: "inline-flex", alignItems: "center",
+              background: active ? ACCENT_SOFT : "transparent",
+              borderBottom: `2px solid ${active ? ACCENT : "transparent"}`,
+              borderRadius: "6px 6px 0 0",
+            }}>
+              {active && isSub ? (
+                // Active sub-flow tab is an inline field — click and rewrite to
+                // rename; changes autosave as you type.
+                <input
+                  value={f.name}
+                  onChange={(e) => renameFlow(f.id, e.target.value)}
+                  onBlur={(e) => { if (!e.target.value.trim()) renameFlow(f.id, "Sub-flow"); }}
+                  onFocus={(e) => e.target.select()}
+                  size={Math.max((f.name || "").length, 4)}
+                  title="Click to rename"
+                  style={{
+                    fontFamily: SANS, fontSize: 13, fontWeight: 600, color: ACCENT,
+                    background: "transparent", border: "none", outline: "none",
+                    padding: "7px 4px 7px 12px",
+                  }}
+                />
+              ) : (
+                <button onClick={() => setActiveFlowId(f.id)} style={{
+                  fontFamily: SANS, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  background: "transparent", color: active ? ACCENT : MUTED,
+                  border: "none", borderRadius: "6px 6px 0 0", padding: "7px 12px",
+                }}>{f.name}</button>
+              )}
+              {isSub && active && (
+                <button onClick={() => { if (window.confirm(`Delete sub-flow "${f.name}"?`)) deleteFlow(f.id); }}
+                  title="Delete sub-flow" style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 13, padding: "0 8px 0 2px" }}>×</button>
               )}
             </span>
           );
@@ -1469,10 +1495,24 @@ export default function WorkflowCapture({
                           <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                             {linkedFlows.map((lf) => (
                               <span key={lf.id} style={{ display: "inline-flex", alignItems: "center", border: `1px solid ${ACCENT}`, background: ACCENT_SOFT, borderRadius: 999, overflow: "hidden" }}>
-                                <button onClick={() => setActiveFlowId(lf.id)} style={{
+                                <button onClick={() => setActiveFlowId(lf.id)} title="Open sub-flow" style={{
                                   border: "none", background: "transparent", color: ACCENT,
-                                  fontSize: 10.5, fontWeight: 600, cursor: "pointer", padding: "2px 4px 2px 9px", fontFamily: SANS,
-                                }}>↳ {lf.name}</button>
+                                  fontSize: 11, fontWeight: 600, cursor: "pointer", padding: "2px 0 2px 9px", fontFamily: SANS,
+                                }}>↳</button>
+                                {/* The name is editable right here — autosaves as you type. */}
+                                <input
+                                  value={lf.name}
+                                  onChange={(e) => renameFlow(lf.id, e.target.value)}
+                                  onBlur={(e) => { if (!e.target.value.trim()) renameFlow(lf.id, "Sub-flow"); }}
+                                  onFocus={(e) => e.target.select()}
+                                  size={Math.max((lf.name || "").length, 3)}
+                                  title="Click to rename sub-flow"
+                                  style={{
+                                    border: "none", background: "transparent", color: ACCENT,
+                                    fontSize: 10.5, fontWeight: 600, fontFamily: SANS, outline: "none",
+                                    padding: "2px 4px", minWidth: 24,
+                                  }}
+                                />
                                 <button onClick={() => unlinkBranch(col.id, lf.id)} title="Unlink sub-flow" style={{
                                   border: "none", background: "transparent", color: ACCENT, fontSize: 11, cursor: "pointer",
                                   padding: "2px 7px 2px 3px", fontFamily: SANS, opacity: 0.7,
