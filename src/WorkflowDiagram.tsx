@@ -9,8 +9,8 @@ const INK = "#2B2A27";
 const MUTED = "#8A857C";
 const SANS = "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif";
 
-const COL_W = 250;
-const ROW_H = 200;
+const COL_W = 260;
+const ROW_H = 230;
 
 const clip = (s, n = 90) => { const t = (s || "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n) + "…" : t; };
 
@@ -22,31 +22,61 @@ export default function WorkflowDiagram({ flows, decisions }) {
     const nodes = [];
     const edges = [];
 
+    const flowById = {};
+    flows.forEach((f) => { flowById[f.id] = f; });
+
+    // "Previous step" columns are reference-only — leave them out of the tree.
+    const realCols = (f) => (f.columns || []).filter((c) => c.name !== "Previous step");
+
     // Which (flow,column) links to each sub-flow → used to position + connect.
     const parentOf = {};
     flows.forEach((f) => {
       Object.entries(f.subflows || {}).forEach(([colId, targetId]) => {
-        if (targetId) parentOf[targetId] = { flowId: f.id, colId };
+        if (targetId && flowById[targetId]) parentOf[targetId] = { flowId: f.id, colId };
       });
     });
 
-    const flowRow = {};
-    flows.forEach((f, i) => { flowRow[f.id] = i; });
+    // Children of each flow, ordered left-to-right by the branching column so
+    // the layout reads the same way the grid does.
+    const childrenOf = {};
+    flows.forEach((f) => {
+      const cols = realCols(f);
+      const kids = [];
+      Object.entries(f.subflows || {}).forEach(([colId, targetId]) => {
+        if (!targetId || !flowById[targetId]) return;
+        kids.push({ colId, targetId, colIdx: cols.findIndex((c) => c.id === colId) });
+      });
+      kids.sort((a, b) => a.colIdx - b.colIdx);
+      childrenOf[f.id] = kids;
+    });
+
+    // Lay out hierarchically: walk the flow tree depth-first so every sub-flow
+    // sits directly below its parent. startX is computed top-down and threaded
+    // through the lineage, so a sub-flow lines up under its branch column no
+    // matter how deeply it is nested. One row per flow keeps lanes from
+    // overlapping vertically.
+    const startXof = {};
+    const rowOf = {};
+    let rowCursor = 0;
+    const visit = (flow, baseX) => {
+      if (!flow || rowOf[flow.id] !== undefined) return;
+      startXof[flow.id] = baseX;
+      rowOf[flow.id] = rowCursor++;
+      (childrenOf[flow.id] || []).forEach(({ colIdx, targetId }) => {
+        visit(flowById[targetId], baseX + Math.max(0, colIdx) * COL_W);
+      });
+    };
+    // Start from the main flow (or any root that nothing branches into).
+    const roots = flows.filter((f) => !parentOf[f.id]);
+    roots.sort((a, b) => (a.id === "main" ? -1 : b.id === "main" ? 1 : 0));
+    roots.forEach((r) => visit(r, 0));
+    // Safety net: place any flow the walk missed (orphaned links) at the bottom.
+    flows.forEach((f) => { if (rowOf[f.id] === undefined) { startXof[f.id] = 0; rowOf[f.id] = rowCursor++; } });
 
     flows.forEach((f) => {
-      const row = flowRow[f.id];
-      // Offset a sub-flow's start under the branch column it hangs off of.
-      let startX = 0;
-      const parent = parentOf[f.id];
-      if (parent) {
-        const pf = flows.find((x) => x.id === parent.flowId);
-        const pCols = pf ? pf.columns.filter((c) => c.name !== "Previous step") : [];
-        const pIdx = pCols.findIndex((c) => c.id === parent.colId);
-        startX = Math.max(0, pIdx) * COL_W + 60;
-      }
-
-      // "Previous step" columns are reference-only — leave them out of the tree.
-      const cols = (f.columns || []).filter((c) => c.name !== "Previous step");
+      const row = rowOf[f.id];
+      const startX = startXof[f.id];
+      const cols = realCols(f);
       cols.forEach((col, i) => {
         const id = `${f.id}:${col.id}`;
         const cell = (f.cells && f.cells[col.id]) || {};
