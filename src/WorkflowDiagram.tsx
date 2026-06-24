@@ -40,11 +40,14 @@ export default function WorkflowDiagram({ flows, decisions }) {
       const parent = parentOf[f.id];
       if (parent) {
         const pf = flows.find((x) => x.id === parent.flowId);
-        const pIdx = pf ? pf.columns.findIndex((c) => c.id === parent.colId) : 0;
+        const pCols = pf ? pf.columns.filter((c) => c.name !== "Previous step") : [];
+        const pIdx = pCols.findIndex((c) => c.id === parent.colId);
         startX = Math.max(0, pIdx) * COL_W + 60;
       }
 
-      (f.columns || []).forEach((col, i) => {
+      // "Previous step" columns are reference-only — leave them out of the tree.
+      const cols = (f.columns || []).filter((c) => c.name !== "Previous step");
+      cols.forEach((col, i) => {
         const id = `${f.id}:${col.id}`;
         const cell = (f.cells && f.cells[col.id]) || {};
         const exceptions = clip(cell.exceptions, 70);
@@ -78,8 +81,8 @@ export default function WorkflowDiagram({ flows, decisions }) {
         });
 
         // Sequential edge to the next step in this flow.
-        if (i < f.columns.length - 1) {
-          edges.push({ id: `${id}->seq`, source: id, target: `${f.id}:${f.columns[i + 1].id}`, type: "smoothstep" });
+        if (i < cols.length - 1) {
+          edges.push({ id: `${id}->seq`, source: id, target: `${f.id}:${cols[i + 1].id}`, type: "smoothstep" });
         }
       });
     });
@@ -89,10 +92,12 @@ export default function WorkflowDiagram({ flows, decisions }) {
       Object.entries(f.subflows || {}).forEach(([colId, targetId]) => {
         const target = flows.find((x) => x.id === targetId);
         if (!target || !target.columns.length) return;
+        // Point at the first real step of the sub-flow, skipping "Previous step".
+        const firstCol = target.columns.find((c) => c.name !== "Previous step") || target.columns[0];
         edges.push({
           id: `${f.id}:${colId}->branch:${targetId}`,
           source: `${f.id}:${colId}`,
-          target: `${targetId}:${target.columns[0].id}`,
+          target: `${targetId}:${firstCol.id}`,
           label: "branch",
           type: "smoothstep",
           animated: true,

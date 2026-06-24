@@ -434,6 +434,18 @@ export default function App() {
     }));
   };
 
+  // Replace existing log entries' content (keeping their id) — used by the
+  // "replace duplicate" option when exporting from a workflow.
+  const replaceLogEntries = (logId, pairs) => {
+    updateLog(logId, (p) => ({
+      ...p,
+      entries: p.entries.map((e) => {
+        const match = pairs.find((x) => x.id === e.id);
+        return match ? { ...e, ...match.entry, id: e.id } : e;
+      }),
+    }));
+  };
+
   const createWorkflow = ({ name, product, owner, projectLinks }) => {
     const id = "wf-" + Date.now();
     setWorkflows((ws) => [...ws, {
@@ -453,14 +465,17 @@ export default function App() {
         initial={initial}
         projectLinks={wf?.content?.links ?? wf?.projectLinks ?? []}
         focusStep={route.focusStep}
+        focusFlowId={route.focusFlowId}
         startInfoEditing={!wf?.content && wf?.seed !== "outfit"}
         onWorkflowsHome={() => setRoute({ view: "workflows" })}
         onContentChange={(content) => updateWorkflowContent(route.id, content)}
         logsIndex={logs.map((l) => ({ id: l.id, title: l.title, code: `${l.settings.prefix}-${l.settings.workflow}` }))}
         existingLogCodes={logs.map((l) => `${l.settings.prefix}-${l.settings.workflow}`.toUpperCase())}
+        logEntriesById={Object.fromEntries(logs.map((l) => [l.id, l.entries.map((e) => ({ id: e.id, decision: e.decision }))]))}
         onCreateLog={createLogSilent}
         onAddToLog={addEntriesToLog}
         onUpdateLogEntries={updateLogEntries}
+        onReplaceLogEntries={replaceLogEntries}
         onOpenLog={(id) => setRoute({ view: "log", id })}
       />
     );
@@ -480,7 +495,7 @@ export default function App() {
         subtitle={SUBTITLE}
         onChange={(updater) => updateLog(log.id, updater)}
         onBack={() => setRoute({ view: "logs" })}
-        onOpenWorkflow={(step) => setRoute({ view: "workflow", id: log.workflowView, focusStep: step })}
+        onOpenWorkflow={(step, flowId) => setRoute({ view: "workflow", id: log.workflowView, focusStep: step, focusFlowId: flowId })}
       />
     );
   }

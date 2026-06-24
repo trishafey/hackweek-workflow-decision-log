@@ -1020,7 +1020,7 @@ export default function DecisionLog({
                   {e.workflowStep
                     ? (log.workflowView && onOpenWorkflow
                         ? <button className="wf-link wf-btn" title={`Open workflow: ${e.workflowStep}`}
-                            onClick={(ev) => { ev.stopPropagation(); onOpenWorkflow(e.workflowStep); }}>{e.workflowStep}</button>
+                            onClick={(ev) => { ev.stopPropagation(); onOpenWorkflow(e.workflowStep, e.workflowFlowId); }}>{e.workflowStep}</button>
                         : (log.workflowLink
                             ? <a className="wf-link" href={log.workflowLink} target="_blank" rel="noopener noreferrer"
                                 title={`${e.workflowStep} → ${log.workflowLink}`} onClick={(ev) => ev.stopPropagation()}>{e.workflowStep}</a>

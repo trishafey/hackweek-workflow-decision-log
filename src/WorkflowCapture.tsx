@@ -304,6 +304,9 @@ function toLogEntry(d) {
     decisionOwner: d.decisionOwner || "",
     workflowStep: d.workflowStep || "",
     otherLink: d.otherLink || "",
+    // Which flow this decision was captured in — lets the decision-log link
+    // deep-link back to the right sub-flow.
+    workflowFlowId: d.anchor?.flowId || "main",
   };
 }
 
@@ -466,7 +469,7 @@ function ExportMenu({ disabled, onText, onExcel, onJSON }) {
 }
 
 // ---------- Decision card ----------
-function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, onJumpAnchor, highlight }) {
+function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, flowLabel, onJumpAnchor, highlight }) {
   const set = (k, v) => onChange({ ...d, [k]: v });
   const ss = statusStyle || STATUS_STYLE[d.status] || STATUS_STYLE["Proposed"];
   const [open, setOpen] = useState(false);
@@ -490,6 +493,7 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, onJu
     }}>
       {/* Collapsed header — click to expand. Pills: workflow step · anchor row · status */}
       <div onClick={() => setOpen((o) => !o)} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", cursor: "pointer" }}>
+        {flowLabel ? <Pill tone="neutral">⑂ {flowLabel}</Pill> : null}
         {d.workflowStep ? <Pill tone="accent">{d.workflowStep}</Pill> : null}
         {anchorRowLabel ? (
           <Pill tone="outline" onClick={(e) => { e.stopPropagation(); onJumpAnchor && onJumpAnchor(); }}>⊙ {anchorRowLabel}</Pill>
@@ -574,9 +578,8 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, onJu
 
 // ---------- Main app ----------
 export default function WorkflowCapture({
-  initial, focusStep, onWorkflowsHome, projectLinks = [],
-  logsIndex = [], existingLogCodes = [], onCreateLog, onAddToLog, onUpdateLogEntries, onOpenLog,
-  onContentChange, startInfoEditing = false,
+  initial, focusStep, focusFlowId, onWorkflowsHome, projectLinks = [],
+  logsIndex = [], existingLogCodes = [], onCreateLog, onAddToLog, onUpdateLogEntries, onReplaceLogEntries, logEntriesById = {}, onContentChange, startInfoEditing = false,
 }) {
   const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
   const [info, setInfo] = useState(init.info);
@@ -634,14 +637,15 @@ export default function WorkflowCapture({
     const sourceId = activeFlowId;
     const nm = ((text || "").split("\n")[0].trim().slice(0, 32)) || ("Branch " + flows.length);
     const id = newFlowId();
-    // First column carries the step this branch came from ("Previous step").
-    const fromStep = (activeFlow.columns.find((c) => c.id === colId)?.name) || "";
+    // First column ("Previous step") inherits ALL row values from the step the
+    // branch came from, so the sub-flow opens with that context pre-filled.
+    const fromCells = { ...(activeFlow.cells[colId] || {}) };
     setFlows((fs) =>
       fs.map((f) => (f.id === sourceId ? { ...f, subflows: { ...f.subflows, [colId]: id } } : f))
         .concat([{
           id, name: nm,
           columns: [{ id: "c0", name: "Previous step" }, { id: "c1", name: "Step 1" }],
-          cells: { c0: { step: fromStep } },
+          cells: { c0: fromCells },
           subflows: {}, nextId: 2,
         }]));
     setActiveFlowId(id);
@@ -702,18 +706,21 @@ export default function WorkflowCapture({
     return () => { document.head.removeChild(l); };
   }, []);
 
-  // Scroll to + highlight the column matching a workflow step linked from the decision log.
+  // Scroll to + highlight the step linked from the decision log — switching to the
+  // right sub-flow first when the decision came from one.
   useEffect(() => {
-    if (!focusStep) return;
-    const col = columns.find((c) => c.name === focusStep);
+    if (!focusStep && !focusFlowId) return;
+    const fid = focusFlowId && flows.some((f) => f.id === focusFlowId) ? focusFlowId : activeFlowId;
+    if (fid !== activeFlowId) setActiveFlowId(fid);
+    const col = flowColumns(fid).find((c) => c.name === focusStep);
     if (!col) return;
     setFocusCol(col.id);
-    const el = document.getElementById("wfcol-" + col.id);
-    if (el) el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    const delay = fid !== activeFlowId ? 100 : 0;
+    const s = setTimeout(() => { document.getElementById("wfcol-" + col.id)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); }, delay);
     const t = setTimeout(() => setFocusCol(null), 2600);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(s); clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusStep]);
+  }, [focusStep, focusFlowId]);
 
   const flash = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
@@ -808,6 +815,12 @@ export default function WorkflowCapture({
     if (!d.anchor) return null;
     const row = ROWS.find((r) => r.key === d.anchor.rowKey);
     return row ? row.label : null;
+  };
+  // The sub-flow a decision belongs to (null for the main flow).
+  const anchorFlowLabel = (d) => {
+    const fid = d.anchor?.flowId || "main";
+    if (fid === "main") return null;
+    return flowName(fid) || "Sub-flow";
   };
 
   // ----- Decision search + filters -----
@@ -915,18 +928,37 @@ export default function WorkflowCapture({
     });
   };
 
+  // Move to the review step, flagging decisions already present in the target log.
+  const enterReview = (logId) => {
+    const existing = logEntriesById[logId] || [];
+    const norm = (s) => (s || "").trim().toLowerCase();
+    setAddToLog((a) => ({
+      ...a, logId, step: "review",
+      items: a.items.map((it) => {
+        const dn = norm(it.d.decision);
+        const match = dn ? existing.find((e) => norm(e.decision) === dn) : null;
+        return { ...it, dupId: match ? match.id : null, action: match ? "skip" : "accept" };
+      }),
+    }));
+  };
+
   const setAddItemAction = (idx, action) =>
     setAddToLog((a) => ({ ...a, items: a.items.map((it, i) => (i === idx ? { ...it, action } : it)) }));
-
   const setAllAddItems = (action) =>
     setAddToLog((a) => ({ ...a, items: a.items.map((it) => ({ ...it, action })) }));
+  const setDupeAction = (action) =>
+    setAddToLog((a) => ({ ...a, items: a.items.map((it) => (it.dupId ? { ...it, action } : it)) }));
 
   const confirmAddToLog = () => {
+    const logId = addToLog.logId;
     const accepted = addToLog.items.filter((it) => it.action === "accept").map((it) => toLogEntry(it.d));
-    const ids = (onAddToLog && onAddToLog(addToLog.logId, accepted)) || [];
-    const added = accepted.map((e, i) => ({ ...e, id: ids[i] || "" }));
+    const replacements = addToLog.items.filter((it) => it.action === "replace" && it.dupId).map((it) => ({ id: it.dupId, entry: toLogEntry(it.d) }));
+    const ids = (accepted.length && onAddToLog) ? onAddToLog(logId, accepted) : [];
+    if (replacements.length && onReplaceLogEntries) onReplaceLogEntries(logId, replacements);
+    const added = accepted.map((e, i) => ({ ...e, id: ids[i] || "" })).concat(replacements.map((r) => ({ ...r.entry, id: r.id })));
     setAddToLog((a) => ({ ...a, step: "done", added }));
-    flash(`${accepted.length} decision${accepted.length === 1 ? "" : "s"} added to the log`);
+    const n = accepted.length + replacements.length;
+    flash(`${n} decision${n === 1 ? "" : "s"} ${replacements.length ? "added/updated" : "added"} to the log`);
   };
 
   // After adding: offer to populate missing fields on the entries that just landed.
@@ -1035,12 +1067,17 @@ export default function WorkflowCapture({
 
   // ----- Grid CSV export -----
   const exportCSV = () => {
-    const header = ["Field", ...columns.map((c) => c.name)].map(csvEscape).join(",");
-    const lines = ROWS.map((row) =>
-      [row.label, ...columns.map((c) => cells[c.id]?.[row.key] || "")].map(csvEscape).join(",")
-    );
-    download(`workflow-${slug(info.workflow)}.csv`, [header, ...lines].join("\n"), "text/csv");
-    flash("Grid CSV exported for FigJam");
+    // Workflow info table.
+    const infoLines = [["Workflow info", ""].map(csvEscape).join(",")]
+      .concat(INFO_FIELDS.map((f) => [f.label, info[f.key] || ""].map(csvEscape).join(",")));
+    // One capture grid per flow.
+    const gridLines = flows.flatMap((f) => {
+      const header = ["Field", ...f.columns.map((c) => c.name)].map(csvEscape).join(",");
+      const rows = ROWS.map((row) => [row.label, ...f.columns.map((c) => f.cells[c.id]?.[row.key] || "")].map(csvEscape).join(","));
+      return ["", [`Capture grid — ${f.name}`].map(csvEscape).join(","), header, ...rows];
+    });
+    download(`workflow-${slug(info.workflow)}.csv`, [...infoLines, ...gridLines].join("\n"), "text/csv");
+    flash("Grid CSV exported (info + flows)");
   };
 
   const labelStyle = {
@@ -1206,18 +1243,15 @@ export default function WorkflowCapture({
 
       {/* ---------- Capture grid / Tree diagram ---------- */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>{view === "grid" ? "Capture grid" : "Tree diagram"}</h2>
-          <div style={{ display: "inline-flex", border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
-            {[["grid", "Grid"], ["diagram", "Tree diagram"]].map(([v, lbl]) => (
-              <button key={v} onClick={() => setView(v)} style={{
-                fontFamily: SANS, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none",
-                padding: "6px 12px", background: view === v ? ACCENT : "transparent", color: view === v ? "#FDFCFA" : MUTED,
-              }}>{lbl}</button>
-            ))}
-          </div>
+        <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>{view === "grid" ? "Capture grid" : "Tree diagram"}</h2>
+        <div style={{ display: "inline-flex", border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
+          {[["grid", "Grid"], ["diagram", "Tree diagram"]].map(([v, lbl]) => (
+            <button key={v} onClick={() => setView(v)} style={{
+              fontFamily: SANS, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none",
+              padding: "6px 12px", background: view === v ? ACCENT : "transparent", color: view === v ? "#FDFCFA" : MUTED,
+            }}>{lbl}</button>
+          ))}
         </div>
-        {view === "grid" && <Btn onClick={addColumn}>+ Add step</Btn>}
       </div>
 
       {view === "diagram" ? (
@@ -1272,10 +1306,11 @@ export default function WorkflowCapture({
           );
         })}
         <button onClick={() => { const id = newFlowId(); setFlows((fs) => [...fs, { id, name: "Sub-flow " + fs.length, columns: [{ id: "c0", name: "Trigger" }, { id: "c1", name: "Step 1" }], cells: {}, subflows: {}, nextId: 2 }]); setActiveFlowId(id); }}
-          style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: ACCENT, background: "transparent", border: "none", cursor: "pointer", padding: "7px 10px" }}>+ Sub-flow</button>
+          style={{ fontFamily: SANS, fontSize: 12, fontWeight: 600, color: INK, background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 8, cursor: "pointer", padding: "6px 11px", marginLeft: 4 }}>+ Sub-flow</button>
       </div>
 
-      <div style={{ overflowX: "auto", border: `1px solid ${BORDER}`, borderRadius: 14, background: CARD_BG, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+      <div style={{ display: "flex", alignItems: "stretch", gap: 10 }}>
+      <div style={{ flex: 1, minWidth: 0, overflowX: "auto", border: `1px solid ${BORDER}`, borderRadius: 14, background: CARD_BG, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: 220 + (showDesc ? DESC_W : 34) + columns.length * 260 }}>
           <thead>
             <tr>
@@ -1315,7 +1350,7 @@ export default function WorkflowCapture({
                     <span style={{ flex: 1 }} />
                     <IconBtn title="Move left" onClick={() => moveColumn(i, -1)}>‹</IconBtn>
                     <IconBtn title="Move right" onClick={() => moveColumn(i, 1)}>›</IconBtn>
-                    <IconBtn danger title="Remove column" onClick={() => removeColumn(col.id)}>×</IconBtn>
+                    <IconBtn danger title="Remove step" onClick={() => { if (window.confirm(`Delete the step "${col.name || "this step"}"? This can't be undone.`)) removeColumn(col.id); }}>×</IconBtn>
                   </div>
                   <input value={col.name} onChange={(e) => renameColumn(col.id, e.target.value)}
                     style={{
@@ -1432,6 +1467,17 @@ export default function WorkflowCapture({
           </tbody>
         </table>
       </div>
+        <button onClick={addColumn} title="Add step" style={{
+          flex: "0 0 60px", border: `2px dashed ${BORDER}`, borderRadius: 14, background: "transparent",
+          color: MUTED, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center", gap: 6, fontFamily: SANS, fontSize: 13, fontWeight: 600,
+        }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.color = ACCENT; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.color = MUTED; }}>
+          <span style={{ fontSize: 22, lineHeight: 1 }}>+</span>
+          <span style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", letterSpacing: ".04em" }}>Add step</span>
+        </button>
+      </div>
 
       <p style={{ fontSize: 11.5, color: MUTED, marginTop: 10 }}>
         Tip: use the <span style={{ fontWeight: 600 }}>Description</span> column's chevron to collapse it. Use a cell's <span style={{ fontWeight: 600 }}>✚</span> to log a decision pinned to that cell, and a <span style={{ fontWeight: 600 }}>Branches</span> cell to create or link a sub-flow.
@@ -1515,11 +1561,12 @@ export default function WorkflowCapture({
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {[...decView].reverse().map((d) => (
+                {decView.map((d) => (
                   <DecisionCard key={d.id} d={d}
                     highlight={highlightId === d.id}
                     statusStyle={STATUS_STYLE[d.status] || STATUS_STYLE["Proposed"]}
                     anchorRowLabel={anchorRowLabel(d)}
+                    flowLabel={anchorFlowLabel(d)}
                     onJumpAnchor={() => jumpToAnchor(d.anchor)}
                     onChange={(nd) => setDecisions((p) => p.map((x) => (x.id === d.id ? nd : x)))}
                     onDelete={() => setDecisions((p) => p.filter((x) => x.id !== d.id))}
@@ -1616,7 +1663,7 @@ export default function WorkflowCapture({
           onClose={() => (logsIndex.length ? setAddToLog((a) => ({ ...a, step: "select" })) : setAddToLog(null))}
           onCreate={(meta) => {
             const id = onCreateLog ? onCreateLog(meta) : null;
-            setAddToLog((a) => ({ ...a, logId: id, step: "review" }));
+            enterReview(id);
           }}
         />
       )}
@@ -1648,13 +1695,15 @@ export default function WorkflowCapture({
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                   <Btn onClick={() => setAddToLog(null)}>Cancel</Btn>
                   <Btn onClick={() => setAddToLog((a) => ({ ...a, step: "create" }))}>+ New log</Btn>
-                  <Btn primary disabled={!addToLog.logId} onClick={() => setAddToLog((a) => ({ ...a, step: "review" }))}>Continue</Btn>
+                  <Btn primary disabled={!addToLog.logId} onClick={() => enterReview(addToLog.logId)}>Continue</Btn>
                 </div>
               </>
             )}
 
             {addToLog.step === "review" && (() => {
-              const acceptedCount = addToLog.items.filter((it) => it.action === "accept").length;
+              const willAdd = addToLog.items.filter((it) => it.action === "accept").length;
+              const willReplace = addToLog.items.filter((it) => it.action === "replace" && it.dupId).length;
+              const dupeCount = addToLog.items.filter((it) => it.dupId).length;
               const destTitle = logsIndex.find((l) => l.id === addToLog.logId)?.title || "the decision log";
               return (
                 <>
@@ -1662,26 +1711,46 @@ export default function WorkflowCapture({
                   <p style={{ fontSize: 13, color: MUTED, margin: "0 0 12px" }}>
                     Accept or reject each entry before it's added to “{destTitle}”.
                   </p>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
                     <Btn small onClick={() => setAllAddItems("accept")}>Accept all</Btn>
                     <Btn small onClick={() => setAllAddItems("reject")}>Reject all</Btn>
-                    <span style={{ marginLeft: "auto", fontSize: 12, color: MUTED }}>{acceptedCount} of {addToLog.items.length} accepted</span>
+                    <span style={{ marginLeft: "auto", fontSize: 12, color: MUTED }}>{willAdd} add · {willReplace} replace</span>
                   </div>
+                  {dupeCount > 0 && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, padding: "8px 11px", background: "#F6EFDC", border: "1px solid #E7D7AE", borderRadius: 9, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#8A6A1F" }}>⚠ {dupeCount} already in this log</span>
+                      <span style={{ flex: 1 }} />
+                      <Btn small onClick={() => setDupeAction("skip")}>Skip all duplicates</Btn>
+                      <Btn small onClick={() => setDupeAction("replace")}>Replace all duplicates</Btn>
+                    </div>
+                  )}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
                     {addToLog.items.map((it, i) => {
                       const ss = STATUS_STYLE[it.d.status] || STATUS_STYLE["Proposed"];
-                      const rejected = it.action === "reject";
+                      const isDup = !!it.dupId;
+                      const inactive = it.action === "reject" || it.action === "skip";
+                      const borderC = inactive ? BORDER : (it.action === "replace" ? "#8A6A1F" : ACCENT);
                       return (
                         <div key={it.d.id} style={{
-                          border: `1px solid ${rejected ? BORDER : ACCENT}`, borderRadius: 10, padding: "10px 12px",
-                          background: rejected ? "transparent" : "#F7FAF8", opacity: rejected ? 0.55 : 1,
+                          border: `1px solid ${borderC}`, borderRadius: 10, padding: "10px 12px",
+                          background: inactive ? "transparent" : (it.action === "replace" ? "#FBF6E9" : "#F7FAF8"), opacity: inactive ? 0.6 : 1,
                         }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
                             {it.d.workflowStep ? <Pill tone="accent">{it.d.workflowStep}</Pill> : null}
                             <Pill bg={ss.bg} fg={ss.fg}>{it.d.status || "Proposed"}</Pill>
+                            {isDup && <Pill bg="#F6EFDC" fg="#8A6A1F">Duplicate</Pill>}
                             <span style={{ flex: 1 }} />
-                            <Btn small primary={!rejected} onClick={() => setAddItemAction(i, "accept")}>Accept</Btn>
-                            <Btn small onClick={() => setAddItemAction(i, "reject")}>Reject</Btn>
+                            {isDup ? (
+                              <>
+                                <Btn small primary={it.action === "replace"} onClick={() => setAddItemAction(i, "replace")}>Replace</Btn>
+                                <Btn small primary={it.action === "skip"} onClick={() => setAddItemAction(i, "skip")}>Skip</Btn>
+                              </>
+                            ) : (
+                              <>
+                                <Btn small primary={it.action === "accept"} onClick={() => setAddItemAction(i, "accept")}>Accept</Btn>
+                                <Btn small onClick={() => setAddItemAction(i, "reject")}>Reject</Btn>
+                              </>
+                            )}
                           </div>
                           <p style={{ fontSize: 12.5, margin: 0, lineHeight: 1.45, whiteSpace: "pre-wrap", fontFamily: SANS, color: INK }}>
                             {(it.d.decision || "Untitled decision").slice(0, 300)}
@@ -1692,8 +1761,8 @@ export default function WorkflowCapture({
                   </div>
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                     <Btn onClick={() => setAddToLog(null)}>Cancel</Btn>
-                    <Btn primary disabled={acceptedCount === 0} onClick={confirmAddToLog}>
-                      Add {acceptedCount} to log
+                    <Btn primary disabled={willAdd + willReplace === 0} onClick={confirmAddToLog}>
+                      {willReplace > 0 ? `Apply (${willAdd} add, ${willReplace} replace)` : `Add ${willAdd} to log`}
                     </Btn>
                   </div>
                 </>
