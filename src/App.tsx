@@ -453,6 +453,7 @@ export default function App() {
         initial={initial}
         projectLinks={wf?.content?.links ?? wf?.projectLinks ?? []}
         focusStep={route.focusStep}
+        startInfoEditing={!wf?.content && wf?.seed !== "outfit"}
         onWorkflowsHome={() => setRoute({ view: "workflows" })}
         onContentChange={(content) => updateWorkflowContent(route.id, content)}
         logsIndex={logs.map((l) => ({ id: l.id, title: l.title, code: `${l.settings.prefix}-${l.settings.workflow}` }))}

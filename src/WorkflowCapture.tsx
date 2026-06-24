@@ -561,7 +561,7 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, onJu
 export default function WorkflowCapture({
   initial, focusStep, onWorkflowsHome, projectLinks = [],
   logsIndex = [], existingLogCodes = [], onCreateLog, onAddToLog, onUpdateLogEntries, onOpenLog,
-  onContentChange,
+  onContentChange, startInfoEditing = false,
 }) {
   const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
   const [info, setInfo] = useState(init.info);
@@ -656,7 +656,7 @@ export default function WorkflowCapture({
   const [showDesc, setShowDesc] = useState(true);
   const [infoOpen, setInfoOpen] = useState(true);
   const [view, setView] = useState("grid"); // "grid" | "diagram"
-  const [infoEditing, setInfoEditing] = useState(false); // Workflow info: view (static) vs edit
+  const [infoEditing, setInfoEditing] = useState(startInfoEditing); // Workflow info: view (static) vs edit; new workflows start in edit
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const [focusCol, setFocusCol] = useState(null);
