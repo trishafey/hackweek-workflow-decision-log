@@ -712,7 +712,6 @@ export default function WorkflowCapture({
   const decIdRef = useRef(
     (init.decisions || []).reduce((m, x) => Math.max(m, (parseInt(String(x.id).replace(/\D/g, ""), 10) || 0) + 1), 1));
   const [showPreview, setShowPreview] = useState(false);
-  const [showDesc, setShowDesc] = useState(true);
   const [infoOpen, setInfoOpen] = useState(true);
   const [view, setView] = useState("grid"); // "grid" | "diagram"
   const [infoEditing, setInfoEditing] = useState(startInfoEditing); // Workflow info: view (static) vs edit; new workflows start in edit
@@ -1140,8 +1139,6 @@ export default function WorkflowCapture({
     fontSize: 13, fontFamily: SANS, color: INK, background: "#FDFCFA", outline: "none", boxSizing: "border-box",
   };
 
-  const DESC_W = 230;
-
   const selectStyle = {
     fontFamily: SANS, fontSize: 13, color: INK, background: CARD_BG,
     border: `1px solid ${BORDER}`, borderRadius: 9, padding: "8px 10px", outline: "none", cursor: "pointer",
@@ -1389,7 +1386,7 @@ export default function WorkflowCapture({
 
       <div style={{ display: "flex", alignItems: "stretch", gap: 10 }}>
       <div style={{ flex: 1, minWidth: 0, overflowX: "auto", border: `1px solid ${BORDER}`, borderRadius: 14, background: CARD_BG, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: 220 + (showDesc ? DESC_W : 34) + columns.length * 260 }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: 210 + columns.length * 260 }}>
           <thead>
             <tr>
               <th style={{
@@ -1399,22 +1396,6 @@ export default function WorkflowCapture({
                 fontFamily: SANS, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em",
                 textTransform: "uppercase", color: MUTED,
               }}>Field</th>
-              <th style={{
-                position: "sticky", left: 210, zIndex: 10, background: "#F5F3EF",
-                borderBottom: `2px solid ${ACCENT}`, borderRight: `1px solid ${BORDER}`,
-                padding: showDesc ? "10px 14px" : "10px 6px", textAlign: "left",
-                minWidth: showDesc ? DESC_W : 34, width: showDesc ? DESC_W : 34,
-                fontFamily: SANS, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em",
-                textTransform: "uppercase", color: MUTED, whiteSpace: "nowrap",
-              }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <button onClick={() => setShowDesc((v) => !v)} title={showDesc ? "Collapse descriptions" : "Show descriptions"}
-                    style={{ border: "none", background: "none", cursor: "pointer", color: ACCENT, padding: 0, fontSize: 15, lineHeight: 1, display: "inline-flex", alignItems: "center" }}>
-                    {showDesc ? "‹" : "›"}
-                  </button>
-                  {showDesc && <span>Description</span>}
-                </span>
-              </th>
               {columns.map((col, i) => (
                 <th key={col.id} id={"wfcol-" + col.id} style={{
                   background: focusCol === col.id ? ACCENT_SOFT : "#F5F3EF", borderBottom: `2px solid ${ACCENT}`,
@@ -1451,23 +1432,22 @@ export default function WorkflowCapture({
                     borderBottom: ri < ROWS.length - 1 ? `1px solid ${BORDER}` : "none",
                     borderRight: "none",
                     padding: "10px 14px", verticalAlign: "top", width: 210, minWidth: 210,
-                  }}>
-                    <span style={{
-                      fontSize: 12.5, fontWeight: 600, color: isAI ? ACCENT : INK,
-                      fontFamily: SANS, lineHeight: 1.3,
-                    }} title={row.tip}>{row.label}</span>
-                  </td>
-                  <td style={{
-                    position: "sticky", left: 210, zIndex: 5,
-                    background: isAI ? ACCENT_SOFT : "#FBFAF8",
-                    borderBottom: ri < ROWS.length - 1 ? `1px solid ${BORDER}` : "none",
                     borderRight: `1px solid ${BORDER}`,
-                    padding: showDesc ? "10px 14px" : "10px 6px", verticalAlign: "top",
-                    width: showDesc ? DESC_W : 34, minWidth: showDesc ? DESC_W : 34,
                   }}>
-                    {showDesc && (
-                      <span style={{ fontSize: 11.5, color: MUTED, fontFamily: SANS, lineHeight: 1.45, fontStyle: "italic" }}>{row.tip}</span>
-                    )}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span style={{
+                        fontSize: 12.5, fontWeight: 600, color: isAI ? ACCENT : INK,
+                        fontFamily: SANS, lineHeight: 1.3,
+                      }}>{row.label}</span>
+                      {row.tip && (
+                        <span title={row.tip} aria-label={row.tip} style={{
+                          flex: "0 0 auto", width: 15, height: 15, borderRadius: "50%",
+                          border: `1px solid ${BORDER}`, color: MUTED, fontSize: 9.5, fontWeight: 700,
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          cursor: "help", fontStyle: "normal", lineHeight: 1, fontFamily: SERIF,
+                        }}>i</span>
+                      )}
+                    </span>
                   </td>
                   {columns.map((col, ci) => {
                     const val = cells[col.id]?.[row.key] || "";
@@ -1570,7 +1550,7 @@ export default function WorkflowCapture({
       </div>
 
       <p style={{ fontSize: 11.5, color: MUTED, marginTop: 10 }}>
-        Tip: use the <span style={{ fontWeight: 600 }}>Description</span> column's chevron to collapse it. Use a cell's <span style={{ fontWeight: 600 }}>✚</span> to log a decision pinned to that cell, and a <span style={{ fontWeight: 600 }}>Branches</span> cell to create or link a sub-flow.
+        Tip: hover the <span style={{ fontWeight: 600 }}>ⓘ</span> next to a field for what it means. Use a cell's <span style={{ fontWeight: 600 }}>✚</span> to log a decision pinned to that cell, and a <span style={{ fontWeight: 600 }}>Branches</span> cell to create or link a sub-flow.
       </p>
       </>)}
 
