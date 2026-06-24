@@ -1542,8 +1542,8 @@ export default function WorkflowCapture({
           </Btn>
           <Btn primary onClick={() => { newDecision({}); flash("Decision added"); }}>+ Add decision</Btn>
         </div>
-        <p style={{ fontSize: 12.5, color: MUTED, margin: "0 0 14px", maxWidth: 640 }}>
-          Notes captured here travel to the Decision Log. Decisions pinned from a grid cell carry a <span style={{ fontWeight: 600 }}>⊙</span> tag back to their cell; JSON exports leave <span style={{ fontFamily: "ui-monospace, monospace" }}>id</span> blank so the log assigns it on import.
+        <p style={{ fontSize: 12.5, color: MUTED, margin: "0 0 14px" }}>
+          Notes captured here travel to the Decision Log. Decisions pinned from a grid cell carry a <span style={{ fontWeight: 600 }}>⊙</span> tag back to their cell.
         </p>
 
         {decisions.length === 0 ? (
