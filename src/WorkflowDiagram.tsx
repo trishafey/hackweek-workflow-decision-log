@@ -27,12 +27,16 @@ export default function WorkflowDiagram({ flows, decisions }) {
 
     // "Previous step" columns are reference-only — leave them out of the tree.
     const realCols = (f) => (f.columns || []).filter((c) => c.name !== "Previous step");
+    // A step can branch into multiple sub-flows; tolerate the older single-id shape.
+    const subList = (v) => (Array.isArray(v) ? v.filter(Boolean) : (v ? [v] : []));
+    // How many sub-flows branch off a given (flow, column).
+    const subCountOf = (f, colId) => subList(f.subflows && f.subflows[colId]).filter((t) => flowById[t]).length;
 
     // Which (flow,column) links to each sub-flow → used to position + connect.
     const parentOf = {};
     flows.forEach((f) => {
       Object.entries(f.subflows || {}).forEach(([colId, targetId]) => {
-        if (targetId && flowById[targetId]) parentOf[targetId] = { flowId: f.id, colId };
+        subList(targetId).forEach((tid) => { if (flowById[tid]) parentOf[tid] = { flowId: f.id, colId }; });
       });
     });
 
@@ -43,8 +47,10 @@ export default function WorkflowDiagram({ flows, decisions }) {
       const cols = realCols(f);
       const kids = [];
       Object.entries(f.subflows || {}).forEach(([colId, targetId]) => {
-        if (!targetId || !flowById[targetId]) return;
-        kids.push({ colId, targetId, colIdx: cols.findIndex((c) => c.id === colId) });
+        subList(targetId).forEach((tid) => {
+          if (!flowById[tid]) return;
+          kids.push({ colId, targetId: tid, colIdx: cols.findIndex((c) => c.id === colId) });
+        });
       });
       kids.sort((a, b) => a.colIdx - b.colIdx);
       childrenOf[f.id] = kids;
@@ -80,9 +86,9 @@ export default function WorkflowDiagram({ flows, decisions }) {
       cols.forEach((col, i) => {
         const id = `${f.id}:${col.id}`;
         const cell = (f.cells && f.cells[col.id]) || {};
-        const exceptions = clip(cell.exceptions, 70);
-        const pain = clip(cell.pain, 70);
+        const action = clip(cell.step, 90);
         const decCount = decisions.filter((d) => d.anchor && (d.anchor.flowId || "main") === f.id && d.anchor.colId === col.id).length;
+        const subCount = subCountOf(f, col.id);
         const isMain = f.id === "main";
         nodes.push({
           id,
@@ -94,9 +100,9 @@ export default function WorkflowDiagram({ flows, decisions }) {
                   {isMain ? "Main flow" : f.name}
                 </div>
                 <div style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 700, color: INK, lineHeight: 1.25 }}>{col.name || "Step"}</div>
-                {exceptions ? <div style={{ fontSize: 10.5, color: "#9C3D2E", marginTop: 4, lineHeight: 1.3 }}>⚠ {exceptions}</div> : null}
-                {pain ? <div style={{ fontSize: 10.5, color: "#8A6A1F", marginTop: 3, lineHeight: 1.3 }}>● {pain}</div> : null}
+                {action ? <div style={{ fontSize: 10.5, color: INK, marginTop: 4, lineHeight: 1.3, opacity: 0.85 }}>{action}</div> : null}
                 {decCount > 0 ? <div style={{ fontSize: 10, fontWeight: 600, color: ACCENT, marginTop: 4 }}>⊙ {decCount} decision{decCount === 1 ? "" : "s"}</div> : null}
+                {subCount > 0 ? <div style={{ fontSize: 10, fontWeight: 600, color: MUTED, marginTop: 3 }}>⑂ {subCount} sub-flow{subCount === 1 ? "" : "s"}</div> : null}
               </div>
             ),
           },
@@ -117,22 +123,24 @@ export default function WorkflowDiagram({ flows, decisions }) {
       });
     });
 
-    // Branch edges: a branch column → the first step of its linked sub-flow.
+    // Branch edges: a branch column → the first step of each linked sub-flow.
     flows.forEach((f) => {
       Object.entries(f.subflows || {}).forEach(([colId, targetId]) => {
-        const target = flows.find((x) => x.id === targetId);
-        if (!target || !target.columns.length) return;
-        // Point at the first real step of the sub-flow, skipping "Previous step".
-        const firstCol = target.columns.find((c) => c.name !== "Previous step") || target.columns[0];
-        edges.push({
-          id: `${f.id}:${colId}->branch:${targetId}`,
-          source: `${f.id}:${colId}`,
-          target: `${targetId}:${firstCol.id}`,
-          label: "branch",
-          type: "smoothstep",
-          animated: true,
-          style: { stroke: ACCENT },
-          labelStyle: { fill: ACCENT, fontWeight: 600, fontSize: 10, fontFamily: SANS },
+        subList(targetId).forEach((tid) => {
+          const target = flowById[tid];
+          if (!target || !target.columns.length) return;
+          // Point at the first real step of the sub-flow, skipping "Previous step".
+          const firstCol = target.columns.find((c) => c.name !== "Previous step") || target.columns[0];
+          edges.push({
+            id: `${f.id}:${colId}->branch:${tid}`,
+            source: `${f.id}:${colId}`,
+            target: `${tid}:${firstCol.id}`,
+            label: "branch",
+            type: "smoothstep",
+            animated: true,
+            style: { stroke: ACCENT },
+            labelStyle: { fill: ACCENT, fontWeight: 600, fontSize: 10, fontFamily: SANS },
+          });
         });
       });
     });
