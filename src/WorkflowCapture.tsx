@@ -325,10 +325,10 @@ function GrowBox({ value, onChange, placeholder, small }) {
       placeholder={placeholder || ""}
       rows={1}
       style={{
-        width: "100%", border: "none", outline: "none", resize: "none",
+        display: "block", width: "100%", border: "none", outline: "none", resize: "none",
         background: "transparent", fontFamily: SANS,
         fontSize: small ? 12.5 : 13, lineHeight: 1.45, color: INK, padding: 0,
-        minHeight: 20, overflow: "hidden", boxSizing: "border-box",
+        minHeight: 18, overflow: "hidden", boxSizing: "border-box", verticalAlign: "top",
       }}
     />
   );
@@ -502,7 +502,6 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, onJu
         )}
         {open && <span style={{ flex: 1 }} />}
         <span style={{ color: MUTED, fontSize: 11 }}>{open ? "▲" : "▼"}</span>
-        <IconBtn danger title="Delete decision" onClick={(e) => { e.stopPropagation && e.stopPropagation(); onDelete(); }}>×</IconBtn>
       </div>
 
       {!open ? null : (
@@ -510,7 +509,9 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, onJu
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px 14px", marginBottom: 12 }}>
         <div>
           <label style={labelStyle}>Date</label>
-          <input type="date" value={d.date || ""} onChange={(e) => set("date", e.target.value)} style={inputStyle} />
+          <input className="wf-date" type="date" value={d.date || ""} style={inputStyle}
+            onClick={(e) => { try { e.currentTarget.showPicker && e.currentTarget.showPicker(); } catch { /* unsupported */ } }}
+            onChange={(e) => set("date", e.target.value)} />
         </div>
         <div>
           <label style={labelStyle}>Status</label>
@@ -554,6 +555,16 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, onJu
           <label style={labelStyle}>Options considered</label>
           <div style={areaWrap}><GrowBox small value={d.optionsConsidered} onChange={(v) => set("optionsConsidered", v)} /></div>
         </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+        <button onClick={() => { if (window.confirm("Delete this decision? This can't be undone.")) onDelete(); }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: SANS, fontSize: 12, fontWeight: 600,
+            color: "#9C3D2E", background: "#fff", border: "1px solid #E7C9C3", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+          Delete
+        </button>
       </div>
       </div>
       )}
