@@ -1176,7 +1176,7 @@ export default function DecisionLog({
                             value={d.subject} onChange={(e) => setDraftField(i, "subject", e.target.value)} />
                           <div className="draft-card-actions">
                             <button className="icon-btn" onClick={() => setExpandedDraft(open ? null : i)} title={open ? "Collapse" : "Edit details"}>
-                              <Caret size={15} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+                              <Caret size={16} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
                             </button>
                           </div>
                         </div>

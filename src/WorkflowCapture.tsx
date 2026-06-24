@@ -3,6 +3,18 @@ import CreateLogModal from "./CreateLogModal";
 import { FILLABLE_LOG, suggestLogField } from "./DecisionLogApp";
 import WorkflowDiagram from "./WorkflowDiagram";
 
+// A 16x16 chevron used for every collapse/expand toggle. Base points down;
+// pass `rotate` (degrees) to point it elsewhere for the closed/open state.
+function Chevron({ size = 16, rotate = 0 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+      style={{ transform: rotate ? `rotate(${rotate}deg)` : "none", transition: "transform .15s", display: "block" }}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
 // ---------- Theme ----------
 const ACCENT = "#1F3A34";
 const ACCENT_SOFT = "#E8EEEC";
@@ -505,7 +517,7 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, flow
           </span>
         )}
         {open && <span style={{ flex: 1 }} />}
-        <span style={{ color: MUTED, fontSize: 11 }}>{open ? "▲" : "▼"}</span>
+        <span style={{ color: MUTED, display: "inline-flex" }}><Chevron rotate={open ? 180 : 0} /></span>
       </div>
 
       {!open ? null : (
@@ -1206,7 +1218,7 @@ export default function WorkflowCapture({
               border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 10px", cursor: "pointer",
             }}>✎ Edit</button>
           )}
-          <span style={{ color: ACCENT, fontSize: 14, fontFamily: SANS, transform: infoOpen ? "none" : "rotate(-90deg)", transition: "transform .15s" }}>▾</span>
+          <span style={{ color: ACCENT, display: "inline-flex" }}><Chevron rotate={infoOpen ? 0 : -90} /></span>
         </h2>
 
         {infoOpen && (infoEditing ? (
