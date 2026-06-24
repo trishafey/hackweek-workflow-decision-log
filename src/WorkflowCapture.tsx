@@ -1320,8 +1320,12 @@ export default function WorkflowCapture({
                 borderRadius: "6px 6px 0 0", padding: "7px 12px",
               }}>{f.name}</button>
               {f.id !== "main" && active && (
-                <button onClick={() => { if (window.confirm(`Delete sub-flow "${f.name}"?`)) deleteFlow(f.id); }}
-                  title="Delete sub-flow" style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 13, padding: "0 4px" }}>×</button>
+                <>
+                  <button onClick={() => { const n = window.prompt("Rename sub-flow", f.name); if (n && n.trim()) renameFlow(f.id, n.trim()); }}
+                    title="Rename sub-flow" style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 12, padding: "0 2px" }}>✎</button>
+                  <button onClick={() => { if (window.confirm(`Delete sub-flow "${f.name}"?`)) deleteFlow(f.id); }}
+                    title="Delete sub-flow" style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 13, padding: "0 4px" }}>×</button>
+                </>
               )}
             </span>
           );
