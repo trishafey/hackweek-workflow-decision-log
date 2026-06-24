@@ -743,6 +743,17 @@ export default function WorkflowCapture({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusStep, focusFlowId]);
 
+  // Jump from the tree diagram to a specific step: open the grid on the right
+  // flow, then scroll to + highlight the column.
+  const goToStep = (flowId, colId) => {
+    setView("grid");
+    const switching = flowId && flows.some((f) => f.id === flowId) && flowId !== activeFlowId;
+    if (switching) setActiveFlowId(flowId);
+    setFocusCol(colId);
+    setTimeout(() => { document.getElementById("wfcol-" + colId)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); }, switching ? 140 : 40);
+    setTimeout(() => setFocusCol(null), 2600);
+  };
+
   const flash = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
   const setCell = (colId, rowKey, val) =>
@@ -1276,7 +1287,7 @@ export default function WorkflowCapture({
       </div>
 
       {view === "diagram" ? (
-        <WorkflowDiagram flows={flows} decisions={decisions} />
+        <WorkflowDiagram flows={flows} decisions={decisions} onSelectStep={goToStep} />
       ) : (<>
       {/* Branch lineage breadcrumb (only for sub-flows) */}
       {activeFlowId !== "main" && (() => {

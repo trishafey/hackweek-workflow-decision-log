@@ -17,7 +17,7 @@ const clip = (s, n = 90) => { const t = (s || "").replace(/\s+/g, " ").trim(); r
 // Build an interactive tree of the whole workflow: each flow's steps as nodes,
 // sequential edges within a flow, and "branch" edges into linked sub-flows.
 // Nodes are annotated with edge cases (exceptions/pain) and decision counts.
-export default function WorkflowDiagram({ flows, decisions }) {
+export default function WorkflowDiagram({ flows, decisions, onSelectStep }) {
   const { nodes, edges } = useMemo(() => {
     const nodes = [];
     const edges = [];
@@ -110,7 +110,7 @@ export default function WorkflowDiagram({ flows, decisions }) {
             width: 220, padding: "10px 12px", borderRadius: 12,
             border: `1px solid ${isMain ? ACCENT : BORDER}`,
             background: isMain ? ACCENT_SOFT : "#fff",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.06)", textAlign: "left",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06)", textAlign: "left", cursor: "pointer",
           },
           sourcePosition: "right",
           targetPosition: "left",
@@ -124,23 +124,32 @@ export default function WorkflowDiagram({ flows, decisions }) {
     });
 
     // Branch edges: a branch column → the first step of each linked sub-flow.
+    // Stagger each branch's turn distance so parallel drops don't sit on top of
+    // one another, and order them by target row so nearer sub-flows turn sooner.
+    let branchSeq = 0;
     flows.forEach((f) => {
+      const branchList = [];
       Object.entries(f.subflows || {}).forEach(([colId, targetId]) => {
         subList(targetId).forEach((tid) => {
           const target = flowById[tid];
           if (!target || !target.columns.length) return;
-          // Point at the first real step of the sub-flow, skipping "Previous step".
           const firstCol = target.columns.find((c) => c.name !== "Previous step") || target.columns[0];
-          edges.push({
-            id: `${f.id}:${colId}->branch:${tid}`,
-            source: `${f.id}:${colId}`,
-            target: `${tid}:${firstCol.id}`,
-            label: "branch",
-            type: "smoothstep",
-            animated: true,
-            style: { stroke: ACCENT },
-            labelStyle: { fill: ACCENT, fontWeight: 600, fontSize: 10, fontFamily: SANS },
-          });
+          branchList.push({ colId, tid, firstCol, row: rowOf[tid] ?? 0 });
+        });
+      });
+      branchList.sort((a, b) => a.row - b.row);
+      branchList.forEach(({ colId, tid, firstCol }) => {
+        const offset = 16 + (branchSeq++ % 5) * 16;
+        edges.push({
+          id: `${f.id}:${colId}->branch:${tid}`,
+          source: `${f.id}:${colId}`,
+          target: `${tid}:${firstCol.id}`,
+          label: "branch",
+          type: "smoothstep",
+          animated: true,
+          pathOptions: { offset, borderRadius: 14 },
+          style: { stroke: ACCENT },
+          labelStyle: { fill: ACCENT, fontWeight: 600, fontSize: 10, fontFamily: SANS },
         });
       });
     });
@@ -150,7 +159,13 @@ export default function WorkflowDiagram({ flows, decisions }) {
 
   return (
     <div style={{ height: "72vh", border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", background: "#FBFAF8" }}>
-      <ReactFlow nodes={nodes} edges={edges} fitView minZoom={0.2} proOptions={{ hideAttribution: true }}>
+      <ReactFlow nodes={nodes} edges={edges} fitView minZoom={0.2} proOptions={{ hideAttribution: true }}
+        onNodeClick={(_e, node) => {
+          if (!onSelectStep) return;
+          const i = String(node.id).lastIndexOf(":");
+          if (i < 0) return;
+          onSelectStep(node.id.slice(0, i), node.id.slice(i + 1));
+        }}>
         <Background color="#E5E1DA" gap={20} />
         <MiniMap pannable zoomable />
         <Controls />
