@@ -531,9 +531,48 @@ function FieldLabel({ label, desc }) {
   );
 }
 
-function Field({ field, value, onChange, subjects, highlight }) {
+function WorkflowStepField({ field, value, onChange, steps, hasWorkflow, onLinkWorkflow, highlight }) {
+  const [custom, setCustom] = useState(false);
+  const inList = steps.includes(value);
+  const showText = custom || (!!value && !inList) || !hasWorkflow || steps.length === 0;
+  return (
+    <label className={"field" + (highlight ? " field-filled" : "")}>
+      <span className="field-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {field.label}
+        {field.desc && (
+          <span className="info" tabIndex={0} aria-label={field.desc}><Info size={12.5} /><span className="tip" role="tooltip">{field.desc}</span></span>
+        )}
+        {!!value && !inList && <span className="unlinked-tag">unlinked</span>}
+      </span>
+      {hasWorkflow && steps.length > 0 && !showText ? (
+        <select className="input" value={inList ? value : ""}
+          onChange={(e) => { if (e.target.value === "__add__") { setCustom(true); onChange("workflowStep", ""); } else onChange("workflowStep", e.target.value); }}>
+          <option value="">Select a step…</option>
+          {steps.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="__add__">+ Add step (unlinked)</option>
+        </select>
+      ) : (
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input className="input" value={value || ""} placeholder={hasWorkflow && steps.length ? "Custom step (unlinked)" : "Step name (unlinked)"}
+            onChange={(e) => onChange("workflowStep", e.target.value)} />
+          {hasWorkflow && steps.length > 0 && (
+            <button type="button" className="btn ghost small" onClick={() => { setCustom(false); onChange("workflowStep", ""); }}>Choose</button>
+          )}
+        </div>
+      )}
+      {!hasWorkflow && (
+        <button type="button" className="wf-link-btn" onClick={onLinkWorkflow}>Link / create workflow →</button>
+      )}
+    </label>
+  );
+}
+
+function Field({ field, value, onChange, subjects, highlight, workflowSteps = [], hasWorkflow = false, onLinkWorkflow }) {
   const id = "f-" + field.key;
   const cls = "field" + (highlight ? " field-filled" : "");
+  if (field.key === "workflowStep") {
+    return <WorkflowStepField field={field} value={value} onChange={onChange} steps={workflowSteps} hasWorkflow={hasWorkflow} onLinkWorkflow={onLinkWorkflow} highlight={highlight} />;
+  }
   if (field.type === "textarea") {
     return (
       <label className={cls}>
@@ -705,6 +744,7 @@ export default function DecisionLog({
   logsIndex = [],
   onRelatedLogsChange,
   initialSettingsOpen = false,
+  workflowSteps = [],
 }) {
   // Controlled by the parent App so created logs and edits persist across navigation.
   const title = log.title;
@@ -1194,7 +1234,9 @@ export default function DecisionLog({
               )}
               {FIELDS.map((f) => (
                 <Field key={f.key} field={f} value={drawer[f.key]} onChange={setDrawerField}
-                  subjects={subjects} highlight={aiFilled.includes(f.key)} />
+                  subjects={subjects} highlight={aiFilled.includes(f.key)}
+                  workflowSteps={workflowSteps} hasWorkflow={!!linkedWorkflow}
+                  onLinkWorkflow={() => setSettingsOpen(true)} />
               ))}
               <Attachments
                 items={drawer.attachments || []}
@@ -1582,6 +1624,10 @@ button.wf-link{border:none;border-bottom:1px solid var(--accent-soft);background
 .link-pill-tbd:hover{background:var(--line-soft)}
 .link-pill-primary{color:#fff;background:var(--accent);border:none;cursor:pointer;font-family:inherit}
 .link-pill-primary:hover{background:var(--accent-ink)}
+.unlinked-tag{font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint);
+  background:var(--line-soft);border:1px solid var(--line);padding:1px 6px;border-radius:5px}
+.wf-link-btn{align-self:flex-start;margin-top:6px;font-family:inherit;font-size:12px;font-weight:600;color:var(--accent);
+  background:transparent;border:none;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .status-banner{position:fixed;top:0;left:0;right:0;z-index:130;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
   justify-content:center;background:var(--accent);color:#fff;padding:11px 18px;
   box-shadow:0 6px 20px -8px rgba(0,0,0,.4);animation:slideDown .22s cubic-bezier(.2,.7,.3,1)}

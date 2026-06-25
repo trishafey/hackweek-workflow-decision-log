@@ -710,6 +710,11 @@ export default function App() {
   } else if (route.view === "log") {
     const log = logs.find((l) => l.id === route.id);
     const lw = log ? workflowForLog(log.id) : null;
+    const lwSteps = (() => {
+      const flows = lw && lw.content && lw.content.flows;
+      const main = flows ? (flows.find((f) => f.id === "main") || flows[0]) : null;
+      return main ? main.columns.map((c) => c.name).filter(Boolean) : [];
+    })();
     body = !log
       ? <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={goWorkflows} onLogs={goLogs} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} onRename={renameLog} />
       : (
@@ -726,6 +731,7 @@ export default function App() {
           extraLinks={wfLinks(lw)}
           logsIndex={logs.filter((l) => l.id !== log.id).map((l) => ({ id: l.id, title: l.title, code: `${l.settings.prefix}-${l.settings.workflow}` }))}
           onRelatedLogsChange={(ids) => updateLog(log.id, (p) => ({ ...p, relatedLogs: ids }))}
+          workflowSteps={lwSteps}
         />
       );
   } else {
