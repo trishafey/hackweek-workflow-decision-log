@@ -212,19 +212,62 @@ function LogsHome({ logs, onOpen, onCreate, onWorkflows, onLogs, onArchive, onDe
   );
 }
 
+// Heuristic "AI" step generator — splits a description into steps, or falls
+// back to a sensible workflow skeleton (no backend; demo-friendly).
+function aiGenerateSteps(name, desc) {
+  const text = (desc || "").trim();
+  if (text) {
+    const parts = text.split(/\n|->|→|;|\.|,|\bthen\b|\bnext\b/i)
+      .map((s) => s.trim().replace(/^(step\s*\d+[:.)-]?\s*)/i, ""))
+      .filter((s) => s.length > 1);
+    if (parts.length >= 2) return parts.slice(0, 12).map((p) => p.charAt(0).toUpperCase() + p.slice(1));
+  }
+  return ["Trigger", "Intake", "Review", "Decision", "Action", "Handoff", "Resolution"];
+}
+
 function CreateWorkflowModal({ onClose, onCreate }) {
   const [name, setName] = useState("");
   const [product, setProduct] = useState("");
   const [owner, setOwner] = useState("");
   const [projectLinks, setProjectLinks] = useState([]);
+  const [stepsMode, setStepsMode] = useState("blank"); // blank | import | ai
+  const [stepsInput, setStepsInput] = useState("");
+  const [steps, setSteps] = useState([]); // confirmed step names
   const valid = name.trim();
+
+  const parseImport = (text) => text.split(/\n|,|→|->|;/).map((s) => s.trim().replace(/^(step\s*\d+[:.)-]?\s*|[-•*]\s*)/i, "")).filter((s) => s.length > 0);
+  const applyImport = () => setSteps(parseImport(stepsInput).slice(0, 20));
+  const runAi = () => setSteps(aiGenerateSteps(name, stepsInput));
+  const editStep = (i, v) => setSteps((s) => s.map((x, idx) => (idx === i ? v : x)));
+  const removeStep = (i) => setSteps((s) => s.filter((_, idx) => idx !== i));
+  const moveStep = (i, dir) => setSteps((s) => { const j = i + dir; if (j < 0 || j >= s.length) return s; const n = [...s]; [n[i], n[j]] = [n[j], n[i]]; return n; });
+
   const submit = () => {
     if (!valid) return;
+    const clean = steps.map((s) => s.trim()).filter(Boolean);
+    let content;
+    if (stepsMode !== "blank" && clean.length) {
+      const cols = clean.map((s, i) => ({ id: "c" + i, name: s }));
+      content = {
+        info: { date: TODAY, product: product.trim(), workflow: name.trim(), deadline: "", smes: "", anchors: "", facilitator: "", scribe: owner.trim(), collaborators: "", logLink: "" },
+        flows: [{ id: "main", name: "Main flow", columns: cols, cells: {}, subflows: {}, nextId: cols.length }],
+        decisions: [], links: projectLinks.filter((l) => (l.label || "").trim() || (l.url || "").trim()), users: [],
+      };
+    }
     onCreate({
       name: name.trim(), product: product.trim(), owner: owner.trim(),
       projectLinks: projectLinks.filter((l) => (l.label || "").trim() || (l.url || "").trim()),
+      content,
     });
   };
+
+  const tab = (key, label) => (
+    <button onClick={() => setStepsMode(key)} style={{
+      fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, cursor: "pointer", border: "none",
+      padding: "7px 13px", background: stepsMode === key ? "#1F3A34" : "transparent", color: stepsMode === key ? "#fff" : "#57534E",
+    }}>{label}</button>
+  );
+
   return (
     <>
       <div className="home-scrim" onClick={onClose} />
@@ -232,7 +275,7 @@ function CreateWorkflowModal({ onClose, onCreate }) {
         <div className="home-modal-head">
           <div>
             <h2>New workflow</h2>
-            <p>Start a blank workflow capture.</p>
+            <p>Start blank, import steps, or generate them — then confirm.</p>
           </div>
           <button className="home-x" onClick={onClose} aria-label="Close">✕</button>
         </div>
@@ -251,6 +294,46 @@ function CreateWorkflowModal({ onClose, onCreate }) {
               <input className="hm-input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="e.g. Priya N. (Ops)" />
             </label>
           </div>
+
+          {/* Steps: blank / import / AI generate */}
+          <div className="hm-field">
+            <span className="hm-label">Steps</span>
+            <div style={{ display: "inline-flex", border: "1px solid #E7E4DD", borderRadius: 8, overflow: "hidden", marginBottom: 8 }}>
+              {tab("blank", "Blank")}{tab("import", "Import")}{tab("ai", "✨ Generate")}
+            </div>
+            {stepsMode === "import" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <textarea className="hm-input" rows={4} value={stepsInput} onChange={(e) => setStepsInput(e.target.value)}
+                  placeholder={"Paste steps — one per line (or comma / arrow separated)\nTrigger\nIntake\nReview\nDecision"} style={{ resize: "vertical", fontFamily: "inherit" }} />
+                <div><button className="hm-btn" onClick={applyImport} disabled={!stepsInput.trim()}>Parse steps</button></div>
+              </div>
+            )}
+            {stepsMode === "ai" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <textarea className="hm-input" rows={3} value={stepsInput} onChange={(e) => setStepsInput(e.target.value)}
+                  placeholder="Describe the workflow in a sentence or two (optional) — e.g. 'Customer requests a return, agent reviews, approves or denies, then issues refund.'" style={{ resize: "vertical", fontFamily: "inherit" }} />
+                <div><button className="hm-btn primary" onClick={runAi}>✨ Generate steps</button></div>
+              </div>
+            )}
+            {stepsMode !== "blank" && steps.length > 0 && (
+              <div style={{ marginTop: 10, border: "1px solid #E7E4DD", borderRadius: 10, padding: 8 }}>
+                <div style={{ fontSize: 11, color: "#94908A", fontWeight: 600, padding: "2px 4px 8px" }}>Confirm steps ({steps.length}) — edit for accuracy before creating</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {steps.map((s, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 11, color: "#94908A", width: 18, textAlign: "right" }}>{i + 1}</span>
+                      <input className="hm-input" value={s} onChange={(e) => editStep(i, e.target.value)} style={{ flex: 1 }} />
+                      <button className="hm-btn" style={{ padding: "6px 8px" }} onClick={() => moveStep(i, -1)} disabled={i === 0} title="Up">↑</button>
+                      <button className="hm-btn" style={{ padding: "6px 8px" }} onClick={() => moveStep(i, 1)} disabled={i === steps.length - 1} title="Down">↓</button>
+                      <button className="hm-btn" style={{ padding: "6px 8px" }} onClick={() => removeStep(i)} title="Remove">✕</button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 8 }}><button className="hm-btn" onClick={() => setSteps((s) => [...s, "New step"])}>+ Add step</button></div>
+              </div>
+            )}
+          </div>
+
           <ProjectLinksEditor links={projectLinks} onChange={setProjectLinks} />
         </div>
         <div className="home-modal-foot">
