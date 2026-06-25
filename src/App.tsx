@@ -505,17 +505,25 @@ export default function App() {
   const deleteWorkflow = (id) => setWorkflows((ws) => ws.filter((w) => w.id !== id));
 
   // Duplicate a log / workflow as an independent copy placed right after it.
-  const duplicateLog = (id) => setLogs((ls) => {
-    const i = ls.findIndex((l) => l.id === id);
-    if (i < 0) return ls;
-    const copy = JSON.parse(JSON.stringify(ls[i]));
-    copy.id = "log-" + Date.now();
-    copy.title = (ls[i].title || "Untitled") + " (copy)";
-    copy.archived = false;
-    const next = [...ls];
-    next.splice(i + 1, 0, copy);
-    return next;
-  });
+  const duplicateLog = (id) => {
+    const src = logs.find((l) => l.id === id);
+    if (!src) return;
+    const newId = "log-" + Date.now();
+    setLogs((ls) => {
+      const i = ls.findIndex((l) => l.id === id);
+      if (i < 0) return ls;
+      const copy = JSON.parse(JSON.stringify(ls[i]));
+      copy.id = newId;
+      copy.title = (ls[i].title || "Untitled") + " (copy)";
+      copy.archived = false;
+      copy.createdAt = Date.now();
+      const next = [...ls];
+      next.splice(i + 1, 0, copy);
+      return next;
+    });
+    // Open the copy with Settings up so the name / ID codes can be made unique.
+    setRoute({ view: "log", id: newId, openSettings: true });
+  };
   const duplicateWorkflow = (id) => setWorkflows((ws) => {
     const i = ws.findIndex((w) => w.id === id);
     if (i < 0) return ws;
@@ -709,6 +717,7 @@ export default function App() {
           key={log.id}
           log={log}
           subtitle={SUBTITLE}
+          initialSettingsOpen={!!route.openSettings}
           onChange={(updater) => updateLog(log.id, updater)}
           onBack={() => setRoute({ view: "logs" })}
           onOpenWorkflow={(step, flowId) => setRoute({ view: "workflow", id: (lw && lw.id) || log.workflowView, focusStep: step, focusFlowId: flowId })}

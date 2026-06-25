@@ -293,6 +293,24 @@ function csvCell(v) {
   return s;
 }
 
+// Minimal RFC-4180-ish CSV parser (handles quotes, escaped quotes, newlines).
+function parseCSV(text) {
+  const rows = []; let row = [], field = "", inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\r") { /* skip */ }
+    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+    else field += c;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
 function download(filename, text, mime) {
   const blob = new Blob([text], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -686,6 +704,7 @@ export default function DecisionLog({
   extraLinks = [],
   logsIndex = [],
   onRelatedLogsChange,
+  initialSettingsOpen = false,
 }) {
   // Controlled by the parent App so created logs and edits persist across navigation.
   const title = log.title;
@@ -711,7 +730,7 @@ export default function DecisionLog({
   const [drafts, setDrafts] = useState(null); // array | null
   const [expandedDraft, setExpandedDraft] = useState(null);
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(initialSettingsOpen);
   const [exportOpen, setExportOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [populateReview, setPopulateReview] = useState(null); // { items } for the across-log review modal
@@ -925,21 +944,28 @@ export default function DecisionLog({
     }
     setExportOpen(false);
   }
-  function importJSON(e) {
+  function importCSV(e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const data = JSON.parse(String(reader.result));
-        let imported = Array.isArray(data) ? data : (data.entries || []);
-        if (!Array.isArray(imported)) throw new Error("bad shape");
-        imported = imported.map((o) => ({ ...emptyEntry(), ...o }));
+        const rows = parseCSV(String(reader.result)).filter((r) => r.some((c) => (c || "").trim() !== ""));
+        if (rows.length < 2) throw new Error("empty");
+        const labelToKey = {};
+        EXPORT_FIELDS.forEach((f) => { labelToKey[f.label.toLowerCase()] = f.key; });
+        const colKeys = rows[0].map((h) => labelToKey[(h || "").trim().toLowerCase()] || null);
+        if (!colKeys.some(Boolean)) throw new Error("no known columns");
+        const imported = rows.slice(1).map((r) => {
+          const obj = { ...emptyEntry() };
+          colKeys.forEach((k, idx) => { if (k) obj[k] = r[idx] != null ? String(r[idx]) : ""; });
+          return obj;
+        }).filter((o) => EXPORT_FIELDS.some((f) => (o[f.key] || "").toString().trim() !== ""));
+        if (!imported.length) throw new Error("no rows");
         setEntries(imported);
-        if (data && data.settings && data.settings.prefix) setSettings(data.settings);
-        flash(`Imported ${imported.length} decision${imported.length === 1 ? "" : "s"}`);
+        flash(`Imported ${imported.length} decision${imported.length === 1 ? "" : "s"} from CSV`);
       } catch {
-        flash("Import failed — not a valid log file");
+        flash("Import failed — expected a decision-log CSV");
       }
     };
     reader.readAsText(file);
@@ -1003,9 +1029,9 @@ export default function DecisionLog({
             )}
           </div>
           <button className="btn ghost" onClick={() => fileInput.current && fileInput.current.click()}>
-            <Upload size={15} /> Import
+            <Upload size={15} /> Import CSV
           </button>
-          <input ref={fileInput} type="file" accept="application/json,.json" style={{ display: "none" }} onChange={importJSON} />
+          <input ref={fileInput} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={importCSV} />
         </div>
       </header>
 
