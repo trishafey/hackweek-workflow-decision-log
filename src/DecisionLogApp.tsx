@@ -898,7 +898,7 @@ export default function DecisionLog({
         </div>
         <div className="topbar-actions">
           <button className="btn ghost" onClick={() => setSettingsOpen(true)}>
-            <Settings size={15} /> <span className="code-chip">{settings.prefix}-{settings.workflow}</span>
+            <Settings size={15} /> Settings
           </button>
           <div className="menu-wrap">
             <button className="btn ghost" onClick={() => setExportOpen((o) => !o)}>
@@ -924,13 +924,13 @@ export default function DecisionLog({
 
       {/* Action row */}
       <div className="actionbar">
-        <button className="btn accent ai-btn" onClick={() => setAiOpen(true)}>
-          <Sparkles size={16} /> Populate from notes
-        </button>
         <button className="btn solid" onClick={openAdd}>
           <Plus size={15} /> Add decision
         </button>
-        <button className="btn ghost" onClick={() => openPopulateReview()} disabled={entries.length === 0}>
+        <button className="btn secondary" onClick={() => setAiOpen(true)}>
+          <Sparkles size={16} /> Populate from notes
+        </button>
+        <button className="btn tertiary" onClick={() => openPopulateReview()} disabled={entries.length === 0}>
           <Sparkles size={15} /> Populate missing fields
         </button>
 
@@ -1384,6 +1384,12 @@ const CSS = `
 .btn.accent{background:var(--accent);color:#fff;box-shadow:0 1px 0 rgba(0,0,0,.04),0 6px 18px -8px rgba(31,58,52,.5)}
 .btn.accent:hover{background:var(--accent-ink)}
 .btn.accent:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
+.btn.secondary{background:var(--surface);border-color:var(--accent);color:var(--accent)}
+.btn.secondary:hover{background:var(--accent-tint)}
+.btn.secondary:disabled{opacity:.5;cursor:not-allowed}
+.btn.tertiary{background:transparent;border-color:transparent;color:var(--ink-faint)}
+.btn.tertiary:hover{color:var(--accent);background:var(--accent-tint)}
+.btn.tertiary:disabled{opacity:.5;cursor:not-allowed;background:transparent;color:var(--ink-faint)}
 .btn.ghost{background:var(--surface);border-color:var(--line);color:var(--ink-soft)}
 .btn.ghost:hover{border-color:#d8d4cc;background:#fff}
 .btn.ghost.danger{color:var(--danger)}

@@ -666,6 +666,7 @@ const subIdList = (subflowsObj, colId) => {
 export default function WorkflowCapture({
   initial, focusStep, focusFlowId, onWorkflowsHome, projectLinks = [],
   logsIndex = [], existingLogCodes = [], onCreateLog, onAddToLog, onUpdateLogEntries, onReplaceLogEntries, onOpenLog, logEntriesById = {}, onContentChange, startInfoEditing = false,
+  workflowsIndex = [], onOpenWorkflow,
 }) {
   const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
   const [info, setInfo] = useState(init.info);
@@ -779,7 +780,7 @@ export default function WorkflowCapture({
   const decIdRef = useRef(
     (init.decisions || []).reduce((m, x) => Math.max(m, (parseInt(String(x.id).replace(/\D/g, ""), 10) || 0) + 1), 1));
   const [showPreview, setShowPreview] = useState(false);
-  const [infoOpen, setInfoOpen] = useState(true);
+  const [infoModalOpen, setInfoModalOpen] = useState(startInfoEditing);
   const [view, setView] = useState("grid"); // "grid" | "diagram"
   const [fullscreen, setFullscreen] = useState(false); // expand grid/diagram to fill the screen
   // On phones we drop the sticky first column so the table can scroll fully.
@@ -791,7 +792,7 @@ export default function WorkflowCapture({
     mq.addEventListener ? mq.addEventListener("change", on) : mq.addListener(on);
     return () => { mq.removeEventListener ? mq.removeEventListener("change", on) : mq.removeListener(on); };
   }, []);
-  const [infoEditing, setInfoEditing] = useState(startInfoEditing); // Workflow info: view (static) vs edit; new workflows start in edit
+  const [relatedPicker, setRelatedPicker] = useState(false); // dropdown to link a related workflow
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const [focusCol, setFocusCol] = useState(null);
@@ -804,15 +805,16 @@ export default function WorkflowCapture({
   const [logFill, setLogFill] = useState(null);   // { logId, items } post-add populate review
   const [links, setLinks] = useState(projectLinks || []);
   const [linkDraft, setLinkDraft] = useState(null); // { label, url } when the add-link modal is open
+  const [related, setRelated] = useState(() => (init.related || []).filter(Boolean)); // related workflow ids
   const fileRef = useRef(null);
 
   // Report content up (debounced) so the App can persist it to the database.
   useEffect(() => {
     if (!onContentChange) return;
-    const t = setTimeout(() => onContentChange({ info, flows, decisions, links }), 400);
+    const t = setTimeout(() => onContentChange({ info, flows, decisions, links, related }), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [info, flows, decisions, links]);
+  }, [info, flows, decisions, links, related]);
 
   // ----- Decision log linking (workflow info) -----
   const [logMenuOpen, setLogMenuOpen] = useState(false);
@@ -824,6 +826,13 @@ export default function WorkflowCapture({
     if (linkedLogId && onOpenLog) { onOpenLog(linkedLogId); return; }
     if (info.logLink) window.open(info.logLink, "_blank", "noopener,noreferrer");
   };
+
+  // ----- Related workflows (same product/goal, different team or variant) -----
+  const relatedList = related.map((id) => workflowsIndex.find((w) => w.id === id)).filter(Boolean);
+  const linkableWorkflows = workflowsIndex.filter((w) => !related.includes(w.id));
+  const addRelated = (id) => { setRelated((r) => (r.includes(id) ? r : [...r, id])); setRelatedPicker(false); flash("Related workflow linked"); };
+  const removeRelated = (id) => setRelated((r) => r.filter((x) => x !== id));
+  const openRelated = (id) => { if (onOpenWorkflow) onOpenWorkflow(id); };
 
   useEffect(() => {
     const l = document.createElement("link");
@@ -1268,18 +1277,9 @@ export default function WorkflowCapture({
           <p style={{ margin: "6px 0 0", fontSize: 13.5, color: MUTED }}>
             Capture the steps, the people, the exceptions — and where AI could fit — while the nuance is still in the room.
           </p>
-          {links.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-              {links.map((pl, i) => (
-                <a key={i} href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{
-                  display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600,
-                  color: ACCENT, background: ACCENT_SOFT, padding: "3px 9px", borderRadius: 999, textDecoration: "none", fontFamily: SANS,
-                }}><LinkGlyph />{pl.label || pl.url}</a>
-              ))}
-            </div>
-          )}
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Btn onClick={() => setInfoModalOpen(true)}>Workflow info</Btn>
           <Menu label="Import / Export ▾" items={[
             { label: "Import JSON", onClick: () => fileRef.current?.click() },
             { label: "Export JSON", onClick: exportWorkflow },
@@ -1290,24 +1290,17 @@ export default function WorkflowCapture({
         </div>
       </div>
 
-      {/* ---------- Workflow info card ---------- */}
-      <div style={{ background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "18px 20px", marginBottom: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-        <h2 onClick={() => setInfoOpen((v) => !v)} style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 600, margin: infoOpen ? "0 0 14px" : 0, color: INK, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
-          Workflow info
+      {/* ---------- Workflow info modal ---------- */}
+      {infoModalOpen && (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(43,42,39,0.45)", zIndex: 100, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 24, overflowY: "auto" }}
+        onClick={() => { setInfoModalOpen(false); flash("Workflow info saved"); }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "20px 22px", width: "100%", maxWidth: 720, margin: "24px 0", boxShadow: "0 16px 50px rgba(0,0,0,0.28)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          <h2 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 600, margin: 0, color: ACCENT, letterSpacing: "-0.01em" }}>Workflow info</h2>
           <span style={{ flex: 1 }} />
-          {infoEditing ? (
-            <Btn small primary onClick={(e) => { e.stopPropagation(); setInfoEditing(false); flash("Workflow info saved"); }}>Save</Btn>
-          ) : (
-            <button onClick={(e) => { e.stopPropagation(); setInfoOpen(true); setInfoEditing(true); }} title="Edit workflow info" style={{
-              fontFamily: SANS, fontSize: 12, fontWeight: 600, color: MUTED, background: "transparent",
-              border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 10px", cursor: "pointer",
-            }}>✎ Edit</button>
-          )}
-          <span style={{ color: ACCENT, display: "inline-flex" }}><Chevron rotate={infoOpen ? 0 : -90} /></span>
-        </h2>
-
-        {infoOpen && (infoEditing ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
+          <button onClick={() => setInfoModalOpen(false)} title="Close" style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
             {INFO_FIELDS.map((f) => (
               <div key={f.key}>
                 <label style={labelStyle}>{f.label}</label>
@@ -1367,9 +1360,6 @@ export default function WorkflowCapture({
                         )}
                       </div>
                     )}
-                    <div style={{ marginTop: 8 }}>
-                      <Btn small onClick={() => setLinkDraft({ label: "", url: "" })}>+ add links</Btn>
-                    </div>
                   </div>
                 ) : f.type === "date" ? (
                   <input className="wf-date" type="date" value={info[f.key] || ""} style={inputStyle}
@@ -1379,67 +1369,92 @@ export default function WorkflowCapture({
                   <input type={f.type || "text"} value={info[f.key] || ""} style={inputStyle}
                     onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
                 )}
-                {f.key === "logLink" && links.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                    {links.map((pl, i) => (
-                      <span key={i} style={{
-                        display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
-                        color: ACCENT, background: ACCENT_SOFT, padding: "3px 6px 3px 9px", borderRadius: 999, fontFamily: SANS,
-                      }}>
-                        <a href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{ display: "inline-flex", alignItems: "center", gap: 4, color: ACCENT, textDecoration: "none" }}><LinkGlyph />{pl.label || pl.url}</a>
-                        <button onClick={() => setLinks(links.filter((_, idx) => idx !== i))} title="Remove" style={{
-                          border: "none", background: "none", color: ACCENT, cursor: "pointer", fontSize: 12, lineHeight: 1, padding: 0,
-                        }}>✕</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
           </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
-            {INFO_FIELDS.map((f) => {
-              const v = (info[f.key] || "").trim();
-              const isUrl = /^https?:\/\//i.test(v);
-              const linkPill = (url, label) => (
-                <a href={url} target="_blank" rel="noopener noreferrer" title={url} style={{
-                  display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600,
-                  color: ACCENT, background: ACCENT_SOFT, padding: "3px 9px", borderRadius: 999, textDecoration: "none", fontFamily: SANS, maxWidth: "100%",
-                }}>
-                  <LinkGlyph />
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-                </a>
-              );
-              return (
-                <div key={f.key}>
-                  <label style={labelStyle}>{f.label}</label>
-                  {f.key === "logLink" ? (
-                    (linkedLog || isUrl || links.length > 0) ? (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
-                        {linkedLog ? (
-                          <button type="button" onClick={openLinkedLog} title="Open decision log" style={{
-                            display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600,
-                            color: ACCENT, background: ACCENT_SOFT, padding: "3px 9px", borderRadius: 999,
-                            border: `1px solid ${ACCENT}`, cursor: "pointer", fontFamily: SANS, maxWidth: "100%",
-                          }}><LinkGlyph /><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{linkedLog.title}</span></button>
-                        ) : isUrl ? linkPill(v, "Decision log") : null}
-                        {links.map((pl, i) => <span key={i}>{linkPill(pl.url, pl.label || pl.url)}</span>)}
-                      </div>
-                    ) : (
-                      <div style={staticVal}>{v || <span style={{ color: MUTED }}>—</span>}</div>
-                    )
-                  ) : isUrl ? (
-                    <div style={{ marginTop: 2 }}>{linkPill(v, v.replace(/^https?:\/\//i, ""))}</div>
-                  ) : (
-                    <div style={staticVal}>{v ? (f.type === "date" ? fmtDate(v) : v) : <span style={{ color: MUTED }}>—</span>}</div>
-                  )}
+        {/* Links + related workflows */}
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${BORDER}`, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          <Btn small onClick={() => setLinkDraft({ label: "", url: "" })}>+ add links</Btn>
+          <div style={{ position: "relative", display: "inline-block" }}>
+            <Btn small onClick={() => setRelatedPicker((o) => !o)}>+ Link to related workflow</Btn>
+            {relatedPicker && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 110 }} onClick={() => setRelatedPicker(false)} />
+                <div style={{ position: "absolute", left: 0, top: "calc(100% + 4px)", zIndex: 111, minWidth: 240, maxHeight: 260, overflowY: "auto", background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 4, boxShadow: "0 10px 26px -10px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column" }}>
+                  {linkableWorkflows.length === 0 ? (
+                    <div style={{ fontSize: 12, color: MUTED, padding: "8px 9px" }}>No other workflows to link.</div>
+                  ) : linkableWorkflows.map((w) => (
+                    <button key={w.id} onClick={() => addRelated(w.id)} style={{ display: "flex", alignItems: "center", gap: 8, border: "none", background: "transparent", borderRadius: 6, padding: "8px 9px", cursor: "pointer", textAlign: "left", fontFamily: SANS }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = ACCENT_SOFT; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: INK }}>{w.name}</span>
+                      {w.product ? <span style={{ marginLeft: "auto", fontSize: 10.5, color: MUTED }}>{w.product}</span> : null}
+                    </button>
+                  ))}
                 </div>
-              );
-            })}
+              </>
+            )}
           </div>
-        ))}
+        </div>
+
+        {(links.length > 0 || relatedList.length > 0) && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+            {links.map((pl, i) => (
+              <span key={"l" + i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: ACCENT, background: ACCENT_SOFT, padding: "3px 6px 3px 9px", borderRadius: 999, fontFamily: SANS }}>
+                <a href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{ display: "inline-flex", alignItems: "center", gap: 4, color: ACCENT, textDecoration: "none" }}><LinkGlyph />{pl.label || pl.url}</a>
+                <button onClick={() => setLinks(links.filter((_, idx) => idx !== i))} title="Remove" style={{ border: "none", background: "none", color: ACCENT, cursor: "pointer", fontSize: 12, lineHeight: 1, padding: 0 }}>✕</button>
+              </span>
+            ))}
+            {relatedList.map((w) => (
+              <span key={"r" + w.id} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: INK, background: "transparent", border: `1px solid ${BORDER}`, padding: "3px 6px 3px 9px", borderRadius: 999, fontFamily: SANS }}>
+                ⇄ {w.name}
+                <button onClick={() => removeRelated(w.id)} title="Remove" style={{ border: "none", background: "none", color: MUTED, cursor: "pointer", fontSize: 12, lineHeight: 1, padding: 0 }}>✕</button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
+          <Btn primary onClick={() => { setInfoModalOpen(false); flash("Workflow info saved"); }}>Done</Btn>
+        </div>
       </div>
+      </div>
+      )}
+
+      {/* ---------- Links visible above the capture grid ---------- */}
+      {(links.length > 0 || linkedLog || relatedList.length > 0) && (
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 18 }}>
+          {linkedLog && (
+            <button type="button" onClick={openLinkedLog} title="Open decision log" style={{
+              display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600,
+              color: ACCENT, background: ACCENT_SOFT, padding: "4px 11px", borderRadius: 999,
+              border: `1px solid ${ACCENT}`, cursor: "pointer", fontFamily: SANS,
+            }}><LinkGlyph />{linkedLog.title}</button>
+          )}
+          {links.map((pl, i) => (
+            <a key={i} href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{
+              display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600,
+              color: ACCENT, background: ACCENT_SOFT, padding: "4px 11px", borderRadius: 999, textDecoration: "none", fontFamily: SANS,
+            }}><LinkGlyph />{pl.label || pl.url}</a>
+          ))}
+          {relatedList.length === 1 && (
+            <button type="button" onClick={() => openRelated(relatedList[0].id)} title="Open related workflow" style={{
+              display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600,
+              color: INK, background: CARD_BG, padding: "4px 11px", borderRadius: 999,
+              border: `1px solid ${BORDER}`, cursor: "pointer", fontFamily: SANS,
+            }}>⇄ {relatedList[0].name}</button>
+          )}
+          {relatedList.length > 1 && (
+            <select value="" onChange={(e) => { if (e.target.value) openRelated(e.target.value); }} style={{
+              fontFamily: SANS, fontSize: 11.5, fontWeight: 600, color: INK, background: CARD_BG,
+              border: `1px solid ${BORDER}`, borderRadius: 999, padding: "4px 10px", cursor: "pointer",
+            }}>
+              <option value="">⇄ Related workflows ({relatedList.length})</option>
+              {relatedList.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          )}
+        </div>
+      )}
 
       {/* ---------- Capture grid / Tree diagram ---------- */}
       <div style={fullscreen ? { position: "fixed", inset: 0, zIndex: 80, background: "#FBFAF8", padding: "14px 16px", overflow: "auto" } : undefined}>

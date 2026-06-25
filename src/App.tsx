@@ -172,17 +172,18 @@ function LogsHome({ logs, onOpen, onCreate, onWorkflows, onLogs, onArchive, onDe
       <div className="home-table-wrap">
         <table className="home-tbl">
           <thead>
-            <tr><th>Decision log</th><th>Product</th><th>Owner</th><th className="num-h">Decisions</th><th>Updated</th><th></th></tr>
+            <tr><th>Decision log</th><th>Prefix</th><th>Product</th><th>Owner</th><th className="num-h">Decisions</th><th>Updated</th><th></th></tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={6} className="home-empty">{needle ? `No decision logs match “${q}”.` : (viewingArchived ? "No archived logs." : "No decision logs yet.")}</td></tr>
+              <tr><td colSpan={7} className="home-empty">{needle ? `No decision logs match “${q}”.` : (viewingArchived ? "No archived logs." : "No decision logs yet.")}</td></tr>
             )}
             {rows.map((l) => {
               const s = summarize(l.entries);
               return (
                 <tr key={l.id} onClick={() => onOpen(l.id)}>
                   <td className="home-name">{l.title}{l.archived ? <span className="home-badge">Archived</span> : null}</td>
+                  <td className="dim mono">{l.settings.prefix}-{l.settings.workflow}</td>
                   <td className="dim">{l.product || "—"}</td>
                   <td className="dim">{l.owner || "—"}</td>
                   <td className="num">{s.count}</td>
@@ -557,6 +558,8 @@ export default function App() {
         onUpdateLogEntries={updateLogEntries}
         onReplaceLogEntries={replaceLogEntries}
         onOpenLog={(id) => setRoute({ view: "log", id })}
+        workflowsIndex={workflows.filter((w) => w.id !== route.id).map((w) => ({ id: w.id, name: w.name, product: w.product }))}
+        onOpenWorkflow={(id) => setRoute({ view: "workflow", id })}
       />
     );
   } else if (route.view === "workflows") {
