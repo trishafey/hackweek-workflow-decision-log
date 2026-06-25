@@ -614,11 +614,9 @@ function ExportMenu({ disabled, onText, onExcel, onJSON }) {
 }
 
 // ---------- Decision card ----------
-function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, flowLabel, onJumpAnchor, highlight }) {
+function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, flowLabel, onJumpAnchor, highlight, mode = "row", onOpen }) {
   const set = (k, v) => onChange({ ...d, [k]: v });
   const ss = statusStyle || STATUS_STYLE[d.status] || STATUS_STYLE["Proposed"];
-  const [open, setOpen] = useState(false);
-  useEffect(() => { if (highlight) setOpen(true); }, [highlight]);
   const labelStyle = {
     fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
     color: MUTED, fontFamily: SANS, marginBottom: 3, display: "block",
@@ -630,31 +628,33 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, flow
   };
   const areaWrap = { border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 9px", background: "#FDFCFA" };
 
-  return (
-    <div id={`dec-${d.id}`} style={{
-      background: CARD_BG, border: `1px solid ${highlight ? ACCENT : BORDER}`,
-      boxShadow: highlight ? `0 0 0 3px ${ACCENT_SOFT}` : "0 1px 3px rgba(0,0,0,0.04)",
-      borderRadius: 14, padding: open ? "16px 18px" : "12px 14px", transition: "all .3s",
-    }}>
-      {/* Collapsed header — click to expand. Pills: workflow step · anchor row · status */}
-      <div onClick={() => setOpen((o) => !o)} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", cursor: "pointer" }}>
-        {flowLabel ? <Pill tone="neutral">⑂ {flowLabel}</Pill> : null}
-        {d.workflowStep ? <Pill tone="accent">{d.workflowStep}</Pill> : null}
-        {anchorRowLabel ? (
-          <Pill tone="outline" onClick={(e) => { e.stopPropagation(); onJumpAnchor && onJumpAnchor(); }}>⊙ {anchorRowLabel}</Pill>
-        ) : null}
-        <Pill bg={ss.bg} fg={ss.fg}>{d.status || "Proposed"}</Pill>
-        {!open && (
+  // Row mode: a collapsed summary in the list; clicking opens the editing drawer.
+  if (mode === "row") {
+    return (
+      <div id={`dec-${d.id}`} onClick={onOpen} style={{
+        background: CARD_BG, border: `1px solid ${highlight ? ACCENT : BORDER}`,
+        boxShadow: highlight ? `0 0 0 3px ${ACCENT_SOFT}` : "0 1px 3px rgba(0,0,0,0.04)",
+        borderRadius: 14, padding: "12px 14px", transition: "all .3s", cursor: "pointer",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {flowLabel ? <Pill tone="neutral">⑂ {flowLabel}</Pill> : null}
+          {d.workflowStep ? <Pill tone="accent">{d.workflowStep}</Pill> : null}
+          {anchorRowLabel ? (
+            <Pill tone="outline" onClick={(e) => { e.stopPropagation(); onJumpAnchor && onJumpAnchor(); }}>⊙ {anchorRowLabel}</Pill>
+          ) : null}
+          <Pill bg={ss.bg} fg={ss.fg}>{d.status || "Proposed"}</Pill>
           <span style={{ flex: 1, minWidth: 80, fontSize: 12.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {d.decision || "Untitled decision"}
           </span>
-        )}
-        {open && <span style={{ flex: 1 }} />}
-        <span style={{ color: MUTED, display: "inline-flex" }}><Chevron rotate={open ? 180 : 0} /></span>
+          <span style={{ color: MUTED, fontSize: 11.5, fontWeight: 600, fontFamily: SANS }}>Edit ›</span>
+        </div>
       </div>
+    );
+  }
 
-      {!open ? null : (
-      <div style={{ marginTop: 12 }}>
+  // Form mode: the full editing surface, rendered inside the drawer.
+  return (
+      <div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px 14px", marginBottom: 12 }}>
         <div>
           <label style={labelStyle}>Date</label>
@@ -716,8 +716,6 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, flow
         </button>
       </div>
       </div>
-      )}
-    </div>
   );
 }
 
@@ -861,6 +859,7 @@ export default function WorkflowCapture({
   const [relatedPicker, setRelatedPicker] = useState(false); // dropdown to link a related workflow
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
+  const [decDrawerId, setDecDrawerId] = useState(null); // decision open in the editing drawer
   const [focusCol, setFocusCol] = useState(null);
   const [decQuery, setDecQuery] = useState("");
   const [decStatus, setDecStatus] = useState("All");
@@ -989,6 +988,7 @@ export default function WorkflowCapture({
       otherLink: "", anchor: null, ...extra,
     };
     setDecisions((p) => [...p, d]);
+    if (opts.drawer) setDecDrawerId(id);
     if (scroll) {
       setHighlightId(id);
       setTimeout(() => {
@@ -1005,7 +1005,7 @@ export default function WorkflowCapture({
       subject: row.label,
       context: (cells[col.id]?.[row.key] || "").trim(),
       anchor: { flowId: activeFlowId, colId: col.id, rowKey: row.key },
-    });
+    }, { drawer: true });
     flash(`Decision logged for ${col.name} · ${row.label}`);
   };
 
@@ -1443,7 +1443,7 @@ export default function WorkflowCapture({
           <button onClick={() => setInfoModalOpen(false)} title="Close" style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
-            {INFO_FIELDS.map((f) => (
+            {INFO_FIELDS.filter((f) => f.key !== "logLink").map((f) => (
               <div key={f.key}>
                 <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 5 }}>{f.label}<InfoDot text={f.tip} /></label>
                 {f.key === "logLink" ? (
@@ -1579,11 +1579,37 @@ export default function WorkflowCapture({
           </div>
         </div>
 
-        {/* Links + related workflows */}
-        <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${BORDER}`, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          <Btn small onClick={() => setLinkDraft({ label: "", url: "" })}>+ add links</Btn>
+        {/* Links — decision log, related workflow, other links grouped together */}
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${BORDER}` }}>
+          <label style={labelStyle}>Links</label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 6 }}>
+          {!linkedLog && (
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <Btn small onClick={() => setLogMenuOpen((o) => !o)}>+ Decision log</Btn>
+              {logMenuOpen && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 110 }} onClick={() => setLogMenuOpen(false)} />
+                  <div style={{ position: "absolute", left: 0, top: "calc(100% + 4px)", zIndex: 111, minWidth: 220, background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 4, boxShadow: "0 10px 26px -10px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column" }}>
+                    {logsIndex.length > 0 && <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: MUTED, padding: "6px 8px 2px" }}>Link existing</div>}
+                    {logsIndex.map((l) => (
+                      <button key={l.id} onClick={() => linkDecisionLog(l.id)} style={{ display: "flex", alignItems: "center", gap: 8, border: "none", background: "transparent", borderRadius: 6, padding: "8px 9px", cursor: "pointer", textAlign: "left", fontFamily: SANS }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = ACCENT_SOFT; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: INK }}>{l.title}</span>
+                        <span style={{ marginLeft: "auto", fontFamily: "ui-monospace, monospace", fontSize: 10.5, color: MUTED }}>{l.code}</span>
+                      </button>
+                    ))}
+                    {logsIndex.length > 0 && <div style={{ height: 1, background: BORDER, margin: "4px 0" }} />}
+                    <button onClick={() => { setLogMenuOpen(false); setCreatingLogLink(true); }} style={{ border: "none", background: "transparent", borderRadius: 6, padding: "8px 9px", cursor: "pointer", textAlign: "left", fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: ACCENT }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = ACCENT_SOFT; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>+ Create new decision log</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <div style={{ position: "relative", display: "inline-block" }}>
-            <Btn small onClick={() => setRelatedPicker((o) => !o)}>+ Link to related workflow</Btn>
+            <Btn small onClick={() => setRelatedPicker((o) => !o)}>+ Related workflow</Btn>
             {relatedPicker && (
               <>
                 <div style={{ position: "fixed", inset: 0, zIndex: 110 }} onClick={() => setRelatedPicker(false)} />
@@ -1602,10 +1628,17 @@ export default function WorkflowCapture({
               </>
             )}
           </div>
+          <Btn small onClick={() => setLinkDraft({ label: "", url: "" })}>+ Other link</Btn>
         </div>
 
-        {(links.length > 0 || relatedList.length > 0) && (
+        {(linkedLog || links.length > 0 || relatedList.length > 0) && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+            {linkedLog && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#FDFCFA", background: ACCENT, padding: "3px 6px 3px 9px", borderRadius: 999, fontFamily: SANS }}>
+                <button onClick={openLinkedLog} title="Open decision log" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#FDFCFA", background: "none", border: "none", cursor: "pointer", fontFamily: SANS, fontSize: 11, fontWeight: 600, padding: 0 }}><LinkGlyph />Decision log: {linkedLog.title}</button>
+                <button onClick={() => setInfo((p) => ({ ...p, logLink: "" }))} title="Unlink" style={{ border: "none", background: "none", color: "#FDFCFA", cursor: "pointer", fontSize: 12, lineHeight: 1, padding: 0, opacity: 0.85 }}>✕</button>
+              </span>
+            )}
             {links.map((pl, i) => (
               <span key={"l" + i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: ACCENT, background: ACCENT_SOFT, padding: "3px 6px 3px 9px", borderRadius: 999, fontFamily: SANS }}>
                 <a href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{ display: "inline-flex", alignItems: "center", gap: 4, color: ACCENT, textDecoration: "none" }}><LinkGlyph />{pl.label || pl.url}</a>
@@ -1620,6 +1653,7 @@ export default function WorkflowCapture({
             ))}
           </div>
         )}
+        </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
           <Btn primary onClick={() => { setInfoModalOpen(false); flash("Workflow info saved"); }}>Done</Btn>
@@ -1991,7 +2025,7 @@ export default function WorkflowCapture({
             title={pendingDecisions.length === 0 ? "No AI pass-2 cells filled yet" : ""}>
             ✨ Decisions found{pendingDecisions.length > 0 ? ` (${pendingDecisions.length})` : ""}
           </Btn>
-          <Btn primary onClick={() => { newDecision({}); flash("Decision added"); }}>+ Add decision</Btn>
+          <Btn primary onClick={() => { newDecision({}, { drawer: true }); }}>+ Add decision</Btn>
         </div>
         <p style={{ fontSize: 12.5, color: MUTED, margin: "0 0 14px" }}>
           Notes captured here travel to the Decision Log. Decisions pinned from a grid cell carry a <span style={{ fontWeight: 600 }}>⊙</span> tag back to their cell.
@@ -2013,12 +2047,13 @@ export default function WorkflowCapture({
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {decView.map((d) => (
-                  <DecisionCard key={d.id} d={d}
+                  <DecisionCard key={d.id} d={d} mode="row"
                     highlight={highlightId === d.id}
                     statusStyle={STATUS_STYLE[d.status] || STATUS_STYLE["Proposed"]}
                     anchorRowLabel={anchorRowLabel(d)}
                     flowLabel={anchorFlowLabel(d)}
                     onJumpAnchor={() => jumpToAnchor(d.anchor)}
+                    onOpen={() => setDecDrawerId(d.id)}
                     onChange={(nd) => setDecisions((p) => p.map((x) => (x.id === d.id ? nd : x)))}
                     onDelete={() => setDecisions((p) => p.filter((x) => x.id !== d.id))}
                   />
@@ -2028,6 +2063,37 @@ export default function WorkflowCapture({
           </>
         )}
       </div>
+
+      {/* ---------- Decision editing drawer ---------- */}
+      {(() => {
+        const dec = decisions.find((x) => x.id === decDrawerId);
+        if (!dec) return null;
+        const close = () => setDecDrawerId(null);
+        return (
+          <>
+            <div onClick={close} style={{ position: "fixed", inset: 0, background: "rgba(43,42,39,0.4)", zIndex: 130 }} />
+            <aside style={{
+              position: "fixed", top: 0, right: 0, height: "100vh", width: "min(480px, 100vw)", zIndex: 131,
+              background: BASE_BG, boxShadow: "-10px 0 40px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${BORDER}` }}>
+                <h3 style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, margin: 0, color: ACCENT }}>Decision</h3>
+                <button onClick={close} title="Close" style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 22, lineHeight: 1, padding: 4 }}>×</button>
+              </div>
+              <div style={{ flex: 1, overflowY: "auto", padding: "18px 20px" }}>
+                <DecisionCard d={dec} mode="form"
+                  statusStyle={STATUS_STYLE[dec.status] || STATUS_STYLE["Proposed"]}
+                  onChange={(nd) => setDecisions((p) => p.map((x) => (x.id === dec.id ? nd : x)))}
+                  onDelete={() => { setDecisions((p) => p.filter((x) => x.id !== dec.id)); close(); }}
+                />
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 20px", borderTop: `1px solid ${BORDER}` }}>
+                <Btn primary onClick={close}>Done</Btn>
+              </div>
+            </aside>
+          </>
+        );
+      })()}
 
       {/* ---------- Decisions found modal ---------- */}
       {showPreview && (

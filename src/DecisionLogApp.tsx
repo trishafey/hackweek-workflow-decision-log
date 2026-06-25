@@ -1318,8 +1318,8 @@ export default function DecisionLog({
               </div>
               <p className="settings-note">Existing IDs are not renumbered. New decisions and accepted drafts continue from the highest current number.</p>
             </div>
-            <div className="modal-foot">
-              <span className="spacer" />
+            <div className="modal-foot" style={{ padding: "14px 22px 20px", marginTop: 0, borderTop: "1px solid var(--line)" }}>
+              <span className="spacer" style={{ flex: 1 }} />
               <button className="btn solid" onClick={() => setSettingsOpen(false)}>Done</button>
             </div>
           </div>
