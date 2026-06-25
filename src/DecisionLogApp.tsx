@@ -1050,8 +1050,8 @@ export default function DecisionLog({
           <p className="sub">{subtitle}</p>
         </div>
         <div className="topbar-actions">
-          <button className="btn ghost" onClick={() => setSettingsOpen(true)}>
-            <Settings size={15} /> Settings
+          <button className="btn ghost" onClick={() => setSettingsOpen(true)} title="Settings">
+            <Settings size={15} /> <span className="btn-t">Settings</span>
           </button>
         </div>
       </header>
@@ -1062,8 +1062,8 @@ export default function DecisionLog({
           <Plus size={15} /> Add decision
         </button>
         <div className="menu-wrap">
-          <button className="btn ghost" onClick={() => setExportOpen((o) => !o)}>
-            <Download size={15} /> Import / Export <Caret size={13} />
+          <button className="btn ghost" onClick={() => setExportOpen((o) => !o)} title="Import / Export">
+            <Download size={15} /> <span className="btn-t">Import / Export</span> <Caret size={13} />
           </button>
           {exportOpen && (
             <>
@@ -1079,11 +1079,11 @@ export default function DecisionLog({
           )}
         </div>
         <input ref={fileInput} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={importCSV} />
-        <button className="btn secondary" onClick={() => setAiOpen(true)}>
-          <Sparkles size={16} /> Populate from notes
+        <button className="btn secondary" onClick={() => setAiOpen(true)} title="Populate from notes">
+          <Sparkles size={16} /> <span className="btn-t">Populate from notes</span>
         </button>
-        <button className="btn tertiary" onClick={() => openPopulateReview()} disabled={entries.length === 0}>
-          <Sparkles size={15} /> Populate missing fields
+        <button className="btn tertiary" onClick={() => openPopulateReview()} disabled={entries.length === 0} title="Populate missing fields">
+          <Sparkles size={15} /> <span className="btn-t">Populate missing fields</span>
         </button>
 
         <div className="filters">
@@ -1548,6 +1548,11 @@ const CSS = `
 .btn.accent{background:var(--accent);color:#fff;box-shadow:0 1px 0 rgba(0,0,0,.04),0 6px 18px -8px rgba(31,58,52,.5)}
 .btn.accent:hover{background:var(--accent-ink)}
 .btn.accent:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
+@media (max-width:700px){
+  .btn:not(.solid) .btn-t{display:none}
+  .btn:not(.solid){padding:8px 10px;gap:0}
+  .btn:not(.solid) .hint{display:none}
+}
 .btn.secondary{background:var(--surface);border-color:var(--accent);color:var(--accent)}
 .btn.secondary:hover{background:var(--accent-tint)}
 .btn.secondary:disabled{opacity:.5;cursor:not-allowed}

@@ -1441,8 +1441,12 @@ export default function WorkflowCapture({
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Btn onClick={() => setInfoModalOpen(true)}>Workflow info</Btn>
-          <Menu label="Import / Export ▾" items={[
+          <Btn onClick={() => setInfoModalOpen(true)} title="Workflow info">{isMobile
+            ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+            : "Workflow info"}</Btn>
+          <Menu label={isMobile
+            ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+            : "Import / Export ▾"} items={[
             { label: "Export Excel", onClick: exportExcel },
             { label: "Import Excel", onClick: () => xlsxRef.current?.click() },
             { divider: true },
