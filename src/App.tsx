@@ -77,15 +77,32 @@ function blankWorkflow(name, product, owner) {
 /* ------------------------------------------------------------------ */
 
 // Per-row kebab (⋯) menu with Archive/Unarchive + Delete.
+// The popup is positioned with fixed coordinates so it is never clipped by the
+// table wrapper's overflow:hidden (which previously hid the last row's menu).
 function RowMenu({ archived, onArchive, onDelete }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const toggle = () => {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const right = window.innerWidth - r.right;
+      // Flip upward when there isn't room for the menu below the button.
+      if (r.bottom + 96 > window.innerHeight) {
+        setPos({ bottom: window.innerHeight - r.top + 4, right });
+      } else {
+        setPos({ top: r.bottom + 4, right });
+      }
+    }
+    setOpen((o) => !o);
+  };
   return (
     <span className="home-menu" onClick={(e) => e.stopPropagation()}>
-      <button className="home-kebab" title="Actions" aria-label="Row actions" onClick={() => setOpen((o) => !o)}>⋯</button>
+      <button ref={btnRef} className="home-kebab" title="Actions" aria-label="Row actions" onClick={toggle}>⋯</button>
       {open && (
         <>
           <div className="home-menu-scrim" onClick={() => setOpen(false)} />
-          <div className="home-menu-pop">
+          <div className="home-menu-pop" style={{ position: "fixed", top: pos?.top ?? "auto", bottom: pos?.bottom ?? "auto", right: pos?.right ?? 0 }}>
             <button onClick={() => { setOpen(false); onArchive(); }}>{archived ? "Unarchive" : "Archive"}</button>
             <button className="danger" onClick={() => { setOpen(false); onDelete(); }}>Delete</button>
           </div>
