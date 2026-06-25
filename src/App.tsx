@@ -532,6 +532,26 @@ export default function App() {
     setRoute({ view: "workflow", id });
   };
 
+  // Remembered values for the workflow-info dropdowns: pull names/products/
+  // anchors used across every workflow and decision log.
+  const splitVals = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
+  const uniqSorted = (arr) => [...new Set(arr)].sort((a, b) => a.localeCompare(b));
+  const fieldSuggestions = (() => {
+    const people = [], products = [], anchors = [];
+    workflows.forEach((w) => {
+      const i = (w.content && w.content.info) || {};
+      ["facilitator", "scribe", "collaborators", "smes"].forEach((k) => people.push(...splitVals(i[k])));
+      products.push(...splitVals(i.product));
+      if (w.product) products.push(w.product);
+      anchors.push(...splitVals(i.anchors));
+    });
+    logs.forEach((l) => {
+      if (l.owner) people.push(...splitVals(l.owner));
+      if (l.product) products.push(l.product);
+    });
+    return { people: uniqSorted(people), product: uniqSorted(products), anchors: uniqSorted(anchors) };
+  })();
+
   const goLogs = () => setRoute({ view: "logs" });
   const goWorkflows = () => setRoute({ view: "workflows" });
 
@@ -560,6 +580,7 @@ export default function App() {
         onOpenLog={(id) => setRoute({ view: "log", id })}
         workflowsIndex={workflows.filter((w) => w.id !== route.id).map((w) => ({ id: w.id, name: w.name, product: w.product }))}
         onOpenWorkflow={(id) => setRoute({ view: "workflow", id })}
+        fieldSuggestions={fieldSuggestions}
       />
     );
   } else if (route.view === "workflows") {

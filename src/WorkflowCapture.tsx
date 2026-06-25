@@ -125,13 +125,14 @@ const ROWS = [
 // ---------- Info fields ----------
 const INFO_FIELDS = [
   { key: "date", label: "Date", type: "date" },
-  { key: "product", label: "Product / feature" },
+  { key: "product", label: "Product / feature", suggest: "product" },
   { key: "workflow", label: "Workflow" },
   { key: "deadline", label: "Deadline / timespan" },
   { key: "smes", label: "SME(s)" },
-  { key: "anchors", label: "System anchors" },
-  { key: "facilitator", label: "Facilitator" },
-  { key: "scribe", label: "Scribe / decision-log owner" },
+  { key: "anchors", label: "System anchors", multi: true, suggest: "anchors" },
+  { key: "facilitator", label: "Facilitator", multi: true, suggest: "people" },
+  { key: "scribe", label: "Scribe / decision-log owner", multi: true, suggest: "people" },
+  { key: "collaborators", label: "Other collaborators", multi: true, suggest: "people" },
   { key: "logLink", label: "Decision log link" },
 ];
 
@@ -458,6 +459,71 @@ function Btn({ children, onClick, primary, title, disabled, small }) {
   );
 }
 
+// Multi-value field with a remembered-suggestions dropdown. Stores the value as
+// a comma-joined string so persistence/export stay string-based.
+function TagInput({ value, onChange, suggestions = [], placeholder }) {
+  const [text, setText] = useState("");
+  const [open, setOpen] = useState(false);
+  const tokens = (value || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const has = (t) => tokens.some((x) => x.toLowerCase() === t.toLowerCase());
+  const commit = (next) => onChange(next.join(", "));
+  const add = (t) => { const v = (t || "").trim(); if (v && !has(v)) commit([...tokens, v]); setText(""); };
+  const remove = (t) => commit(tokens.filter((x) => x !== t));
+  const filtered = suggestions
+    .filter((s) => !has(s) && s.toLowerCase().includes(text.trim().toLowerCase()))
+    .slice(0, 8);
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{
+        display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center",
+        border: `1px solid ${BORDER}`, borderRadius: 8, background: "#fff", padding: "5px 7px", minHeight: 36,
+      }}>
+        {tokens.map((t) => (
+          <span key={t} style={{
+            display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600,
+            color: ACCENT, background: ACCENT_SOFT, borderRadius: 999, padding: "2px 4px 2px 9px", fontFamily: SANS,
+          }}>{t}
+            <button onClick={() => remove(t)} title="Remove" style={{ border: "none", background: "none", color: ACCENT, cursor: "pointer", fontSize: 12, lineHeight: 1, padding: "0 3px" }}>×</button>
+          </span>
+        ))}
+        <input
+          value={text}
+          placeholder={tokens.length ? "" : placeholder}
+          onChange={(e) => { setText(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 130)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); add(text); }
+            else if (e.key === "Backspace" && !text && tokens.length) remove(tokens[tokens.length - 1]);
+          }}
+          style={{ flex: 1, minWidth: 90, border: "none", outline: "none", background: "transparent", fontFamily: SANS, fontSize: 13, color: INK, padding: "2px 0" }}
+        />
+      </div>
+      {open && (filtered.length > 0 || text.trim()) && (
+        <div style={{
+          position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 120, maxHeight: 200, overflowY: "auto",
+          background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 4, boxShadow: "0 10px 26px -10px rgba(0,0,0,0.25)",
+        }}>
+          {filtered.map((s) => (
+            <button key={s} onMouseDown={(e) => { e.preventDefault(); add(s); }} style={{
+              display: "block", width: "100%", textAlign: "left", border: "none", background: "transparent",
+              borderRadius: 6, padding: "7px 9px", cursor: "pointer", fontFamily: SANS, fontSize: 12.5, color: INK,
+            }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = ACCENT_SOFT; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>{s}</button>
+          ))}
+          {text.trim() && !suggestions.some((s) => s.toLowerCase() === text.trim().toLowerCase()) && (
+            <button onMouseDown={(e) => { e.preventDefault(); add(text); }} style={{
+              display: "block", width: "100%", textAlign: "left", border: "none", background: "transparent",
+              borderRadius: 6, padding: "7px 9px", cursor: "pointer", fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: ACCENT,
+            }}>+ Add “{text.trim()}”</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function IconBtn({ children, onClick, title, danger }) {
   return (
     <button onClick={onClick} title={title} style={{
@@ -666,7 +732,7 @@ const subIdList = (subflowsObj, colId) => {
 export default function WorkflowCapture({
   initial, focusStep, focusFlowId, onWorkflowsHome, projectLinks = [],
   logsIndex = [], existingLogCodes = [], onCreateLog, onAddToLog, onUpdateLogEntries, onReplaceLogEntries, onOpenLog, logEntriesById = {}, onContentChange, startInfoEditing = false,
-  workflowsIndex = [], onOpenWorkflow,
+  workflowsIndex = [], onOpenWorkflow, fieldSuggestions = {},
 }) {
   const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
   const [info, setInfo] = useState(init.info);
@@ -1365,6 +1431,17 @@ export default function WorkflowCapture({
                   <input className="wf-date" type="date" value={info[f.key] || ""} style={inputStyle}
                     onClick={(e) => { try { e.currentTarget.showPicker && e.currentTarget.showPicker(); } catch { /* not supported */ } }}
                     onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
+                ) : f.multi ? (
+                  <TagInput value={info[f.key] || ""} suggestions={fieldSuggestions[f.suggest] || []}
+                    placeholder="Type a name…" onChange={(v) => setInfo((p) => ({ ...p, [f.key]: v }))} />
+                ) : f.suggest ? (
+                  <>
+                    <input type="text" list={`sugg-${f.key}`} value={info[f.key] || ""} style={inputStyle}
+                      onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
+                    <datalist id={`sugg-${f.key}`}>
+                      {(fieldSuggestions[f.suggest] || []).map((s) => <option key={s} value={s} />)}
+                    </datalist>
+                  </>
                 ) : (
                   <input type={f.type || "text"} value={info[f.key] || ""} style={inputStyle}
                     onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
