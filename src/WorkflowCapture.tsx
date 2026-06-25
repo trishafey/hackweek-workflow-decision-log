@@ -124,16 +124,16 @@ const ROWS = [
 
 // ---------- Info fields ----------
 const INFO_FIELDS = [
-  { key: "date", label: "Date", type: "date" },
-  { key: "product", label: "Product / feature", suggest: "product" },
-  { key: "workflow", label: "Workflow" },
-  { key: "deadline", label: "Deadline / timespan" },
-  { key: "smes", label: "SME(s)" },
-  { key: "anchors", label: "System anchors", multi: true, suggest: "anchors" },
-  { key: "facilitator", label: "Facilitator", multi: true, suggest: "people" },
-  { key: "scribe", label: "Scribe / decision-log owner", multi: true, suggest: "people" },
-  { key: "collaborators", label: "Other collaborators", multi: true, suggest: "people" },
-  { key: "logLink", label: "Decision log link" },
+  { key: "date", label: "Date", type: "date", tip: "When the capture session happened — anchors the artifact in time." },
+  { key: "product", label: "Product / feature", suggest: "product", tip: "The product or feature this workflow belongs to." },
+  { key: "workflow", label: "Workflow", tip: "The name of the workflow being captured — what everything else hangs off." },
+  { key: "deadline", label: "Deadline / timespan", tip: "When this needs to feed into design, and/or how long the real-world process takes end to end." },
+  { key: "smes", label: "SME(s)", tip: "Subject-matter experts being interviewed — 1–2 power users who are the source of truth." },
+  { key: "anchors", label: "System anchors", multi: true, suggest: "anchors", tip: "People familiar with the backend/tech systems (architect, DPM, dev) who surface what's technically possible." },
+  { key: "facilitator", label: "Facilitator", multi: true, suggest: "people", tip: "Guides the conversation — asks the elicitation questions and decides when to dig vs. move on (DPM or UX)." },
+  { key: "scribe", label: "Scribe / decision-log owner", multi: true, suggest: "people", tip: "Writes the notes, fills in the workflow, and owns/maintains the decision log." },
+  { key: "collaborators", label: "Other collaborators", multi: true, suggest: "people", tip: "Other team members who contributed to the workflow." },
+  { key: "logLink", label: "Decision log link", tip: "A direct link to where this workflow's decision log lives." },
 ];
 
 // ---------- Seed data: Daily outfit generator — live session capture ----------
@@ -732,7 +732,7 @@ const subIdList = (subflowsObj, colId) => {
 export default function WorkflowCapture({
   initial, focusStep, focusFlowId, onWorkflowsHome, projectLinks = [],
   logsIndex = [], existingLogCodes = [], onCreateLog, onAddToLog, onUpdateLogEntries, onReplaceLogEntries, onOpenLog, logEntriesById = {}, onContentChange, startInfoEditing = false,
-  workflowsIndex = [], onOpenWorkflow, fieldSuggestions = {},
+  workflowsIndex = [], onOpenWorkflow, fieldSuggestions = {}, relatedIds = [], onRelatedChange,
 }) {
   const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
   const [info, setInfo] = useState(init.info);
@@ -871,16 +871,20 @@ export default function WorkflowCapture({
   const [logFill, setLogFill] = useState(null);   // { logId, items } post-add populate review
   const [links, setLinks] = useState(projectLinks || []);
   const [linkDraft, setLinkDraft] = useState(null); // { label, url } when the add-link modal is open
-  const [related, setRelated] = useState(() => (init.related || []).filter(Boolean)); // related workflow ids
+  // Related workflows live on the workflow record (App manages reciprocity), so
+  // we seed from the prop and report changes up rather than into content.
+  const [related, setRelated] = useState(() => ((relatedIds && relatedIds.length) ? relatedIds : (init.related || [])).filter(Boolean));
+  const setRelatedAnd = (updater) => setRelated((r) => { const n = (typeof updater === "function" ? updater(r) : updater).filter(Boolean); if (onRelatedChange) onRelatedChange(n); return n; });
+  const [users, setUsers] = useState(() => (init.users || [])); // [{id,type,group,role,description}]
   const fileRef = useRef(null);
 
   // Report content up (debounced) so the App can persist it to the database.
   useEffect(() => {
     if (!onContentChange) return;
-    const t = setTimeout(() => onContentChange({ info, flows, decisions, links, related }), 400);
+    const t = setTimeout(() => onContentChange({ info, flows, decisions, links, users }), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [info, flows, decisions, links, related]);
+  }, [info, flows, decisions, links, users]);
 
   // ----- Decision log linking (workflow info) -----
   const [logMenuOpen, setLogMenuOpen] = useState(false);
@@ -896,9 +900,20 @@ export default function WorkflowCapture({
   // ----- Related workflows (same product/goal, different team or variant) -----
   const relatedList = related.map((id) => workflowsIndex.find((w) => w.id === id)).filter(Boolean);
   const linkableWorkflows = workflowsIndex.filter((w) => !related.includes(w.id));
-  const addRelated = (id) => { setRelated((r) => (r.includes(id) ? r : [...r, id])); setRelatedPicker(false); flash("Related workflow linked"); };
-  const removeRelated = (id) => setRelated((r) => r.filter((x) => x !== id));
+  const addRelated = (id) => { setRelatedAnd((r) => (r.includes(id) ? r : [...r, id])); setRelatedPicker(false); flash("Related workflow linked"); };
+  const removeRelated = (id) => setRelatedAnd((r) => r.filter((x) => x !== id));
   const openRelated = (id) => { if (onOpenWorkflow) onOpenWorkflow(id); };
+
+  // ----- Users (typical roles in this workflow) -----
+  const userIdRef = useRef((init.users || []).reduce((m, x) => Math.max(m, parseInt(String(x.id).replace(/\D/g, ""), 10) || 0), 0) + 1);
+  const addUser = () => setUsers((u) => [...u, { id: "u-" + (userIdRef.current++), type: "internal", group: "", role: "", description: "" }]);
+  const updateUser = (id, patch) => setUsers((u) => u.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const removeUser = (id) => setUsers((u) => u.filter((x) => x.id !== id));
+  const userGroupMeta = (type) =>
+    type === "internal" ? { label: "Business area", suggest: "areas", ph: "e.g. Scheduling & Assignment" }
+    : type === "partner" ? { label: "Partner", suggest: "partners", ph: "Partner name" }
+    : type === "client" ? { label: "Client", suggest: null, ph: "Client name (optional)" }
+    : { label: "System", suggest: null, ph: "System name" };
 
   useEffect(() => {
     const l = document.createElement("link");
@@ -1369,7 +1384,7 @@ export default function WorkflowCapture({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px 16px" }}>
             {INFO_FIELDS.map((f) => (
               <div key={f.key}>
-                <label style={labelStyle}>{f.label}</label>
+                <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 5 }}>{f.label}<InfoDot text={f.tip} /></label>
                 {f.key === "logLink" ? (
                   <div>
                     {linkedLog ? (
@@ -1449,6 +1464,60 @@ export default function WorkflowCapture({
               </div>
             ))}
           </div>
+
+        {/* Users — typical roles in this workflow */}
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${BORDER}` }}>
+          <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 5 }}>
+            Users<InfoDot text="Who is typically in this workflow and what they do — internal team, partner, client, or a system." />
+          </label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+            {users.map((u) => {
+              const meta = userGroupMeta(u.type);
+              return (
+                <div key={u.id} style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px", background: "#fff" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-end" }}>
+                    <div style={{ minWidth: 120 }}>
+                      <label style={labelStyle}>Type</label>
+                      <select value={u.type} onChange={(e) => updateUser(u.id, { type: e.target.value, group: "" })} style={{ ...inputStyle, cursor: "pointer" }}>
+                        <option value="internal">Internal</option>
+                        <option value="partner">Partner</option>
+                        <option value="client">Client</option>
+                        <option value="system">System</option>
+                      </select>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 150 }}>
+                      <label style={labelStyle}>{meta.label}</label>
+                      <input type="text" list={meta.suggest ? `usugg-${meta.suggest}` : undefined} value={u.group || ""} placeholder={meta.ph}
+                        onChange={(e) => updateUser(u.id, { group: e.target.value })} style={inputStyle} />
+                      {meta.suggest && (
+                        <datalist id={`usugg-${meta.suggest}`}>
+                          {(fieldSuggestions[meta.suggest] || []).map((s) => <option key={s} value={s} />)}
+                        </datalist>
+                      )}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 130 }}>
+                      <label style={labelStyle}>Role</label>
+                      <input type="text" value={u.role || ""} placeholder="e.g. Team Leader"
+                        onChange={(e) => updateUser(u.id, { role: e.target.value })} style={inputStyle} />
+                    </div>
+                    <button onClick={() => removeUser(u.id)} title="Remove user" style={{
+                      border: `1px solid ${BORDER}`, background: CARD_BG, color: MUTED, cursor: "pointer",
+                      borderRadius: 7, padding: "7px 10px", fontFamily: SANS, fontSize: 12,
+                    }}>Remove</button>
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <label style={labelStyle}>What they typically do</label>
+                    <textarea value={u.description || ""} rows={2} placeholder="e.g. Manages their team's dashboard, creates reports, handles escalations…"
+                      onChange={(e) => updateUser(u.id, { description: e.target.value })}
+                      style={{ ...inputStyle, resize: "vertical", lineHeight: 1.4 }} />
+                  </div>
+                </div>
+              );
+            })}
+            <div><Btn small onClick={addUser}>+ Add user</Btn></div>
+          </div>
+        </div>
+
         {/* Links + related workflows */}
         <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${BORDER}`, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
           <Btn small onClick={() => setLinkDraft({ label: "", url: "" })}>+ add links</Btn>

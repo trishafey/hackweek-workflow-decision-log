@@ -537,20 +537,36 @@ export default function App() {
   const splitVals = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
   const uniqSorted = (arr) => [...new Set(arr)].sort((a, b) => a.localeCompare(b));
   const fieldSuggestions = (() => {
-    const people = [], products = [], anchors = [];
+    const people = [], products = [], anchors = [], areas = [], partners = [];
     workflows.forEach((w) => {
       const i = (w.content && w.content.info) || {};
       ["facilitator", "scribe", "collaborators", "smes"].forEach((k) => people.push(...splitVals(i[k])));
       products.push(...splitVals(i.product));
       if (w.product) products.push(w.product);
       anchors.push(...splitVals(i.anchors));
+      ((w.content && w.content.users) || []).forEach((u) => {
+        if (u.type === "internal" && u.group) areas.push(u.group.trim());
+        if (u.type === "partner" && u.group) partners.push(u.group.trim());
+      });
     });
     logs.forEach((l) => {
       if (l.owner) people.push(...splitVals(l.owner));
       if (l.product) products.push(l.product);
     });
-    return { people: uniqSorted(people), product: uniqSorted(products), anchors: uniqSorted(anchors) };
+    return { people: uniqSorted(people), product: uniqSorted(products), anchors: uniqSorted(anchors), areas: uniqSorted(areas), partners: uniqSorted(partners) };
   })();
+
+  // Set a workflow's related list and keep the reverse links in sync so adding
+  // A↔B on one side shows on the other.
+  const setWorkflowRelated = (id, ids) => setWorkflows((ws) => ws.map((w) => {
+    if (w.id === id) return { ...w, related: ids };
+    const cur = w.related || [];
+    const should = ids.includes(w.id);
+    const has = cur.includes(id);
+    if (should && !has) return { ...w, related: [...cur, id] };
+    if (!should && has) return { ...w, related: cur.filter((x) => x !== id) };
+    return w;
+  }));
 
   const goLogs = () => setRoute({ view: "logs" });
   const goWorkflows = () => setRoute({ view: "workflows" });
@@ -581,6 +597,8 @@ export default function App() {
         workflowsIndex={workflows.filter((w) => w.id !== route.id).map((w) => ({ id: w.id, name: w.name, product: w.product }))}
         onOpenWorkflow={(id) => setRoute({ view: "workflow", id })}
         fieldSuggestions={fieldSuggestions}
+        relatedIds={wf?.related ?? wf?.content?.related ?? []}
+        onRelatedChange={(ids) => setWorkflowRelated(route.id, ids)}
       />
     );
   } else if (route.view === "workflows") {
