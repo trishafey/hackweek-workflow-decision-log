@@ -1050,8 +1050,8 @@ export default function DecisionLog({
           <p className="sub">{subtitle}</p>
         </div>
         <div className="topbar-actions">
-          <button className="btn ghost" onClick={() => setSettingsOpen(true)} title="Settings">
-            <Settings size={15} /> <span className="btn-t">Settings</span>
+          <button className="btn ghost" onClick={() => setSettingsOpen(true)} title="Decision log info">
+            <Settings size={15} /> <span className="btn-t">Decision log info</span>
           </button>
         </div>
       </header>
@@ -1394,7 +1394,7 @@ export default function DecisionLog({
           <div className="scrim" onClick={() => setSettingsOpen(false)} />
           <div className="modal settings-modal">
             <div className="modal-head">
-              <div className="modal-title"><div><h2>Settings</h2><p>Log details, and the codes that drive new IDs.</p></div></div>
+              <div className="modal-title"><div><h2>Decision log info</h2><p>Log details, and the codes that drive new IDs.</p></div></div>
               <button className="icon-btn" onClick={() => setSettingsOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body">
