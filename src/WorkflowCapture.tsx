@@ -861,6 +861,8 @@ export default function WorkflowCapture({
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const [decDrawerId, setDecDrawerId] = useState(null); // decision open in the editing drawer
+  const [dragCol, setDragCol] = useState(null); // index of the step column being dragged
+  const [dropCol, setDropCol] = useState(null); // index currently hovered as drop target
   const [wfStatusBanner, setWfStatusBanner] = useState(null); // { from, to, subject, workflowStep, anchor } after a status change
   const [focusCol, setFocusCol] = useState(null);
   const [decQuery, setDecQuery] = useState("");
@@ -967,6 +969,11 @@ export default function WorkflowCapture({
     const j = idx + dir;
     if (j < 0 || j >= columns.length) return;
     setColumns((p) => { const n = [...p]; [n[idx], n[j]] = [n[j], n[idx]]; return n; });
+  };
+  // Drag-and-drop reorder a step column from one position to another.
+  const reorderColumn = (from, to) => {
+    if (from === to || from == null || to == null) return;
+    setColumns((p) => { const n = [...p]; const [moved] = n.splice(from, 1); n.splice(to, 0, moved); return n; });
   };
 
   const renameColumn = (id, name) =>
@@ -1902,14 +1909,25 @@ export default function WorkflowCapture({
                 textTransform: "uppercase", color: MUTED,
               }}>Field</th>
               {columns.map((col, i) => (
-                <th key={col.id} id={"wfcol-" + col.id} style={{
-                  background: focusCol === col.id ? ACCENT_SOFT : "#F5F3EF", borderBottom: `2px solid ${ACCENT}`,
+                <th key={col.id} id={"wfcol-" + col.id}
+                  onDragOver={(e) => { if (dragCol != null) { e.preventDefault(); if (dropCol !== i) setDropCol(i); } }}
+                  onDrop={(e) => { e.preventDefault(); reorderColumn(dragCol, i); setDragCol(null); setDropCol(null); }}
+                  style={{
+                  background: dragCol === i ? ACCENT_SOFT : (focusCol === col.id ? ACCENT_SOFT : "#F5F3EF"), borderBottom: `2px solid ${ACCENT}`,
                   borderRight: i < columns.length - 1 ? `1px solid ${BORDER}` : "none",
-                  boxShadow: focusCol === col.id ? `inset 0 0 0 2px ${ACCENT}` : "none",
-                  transition: "background .3s, box-shadow .3s",
+                  boxShadow: (dropCol === i && dragCol != null && dragCol !== i)
+                    ? `inset ${dragCol < i ? "-3px" : "3px"} 0 0 ${ACCENT}`
+                    : (focusCol === col.id ? `inset 0 0 0 2px ${ACCENT}` : "none"),
+                  opacity: dragCol === i ? 0.5 : 1,
+                  transition: "background .3s, box-shadow .15s, opacity .15s",
                   padding: "8px 12px", minWidth: 250, verticalAlign: "top",
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <span draggable
+                      onDragStart={(e) => { setDragCol(i); try { e.dataTransfer.effectAllowed = "move"; } catch { /* noop */ } }}
+                      onDragEnd={() => { setDragCol(null); setDropCol(null); }}
+                      title="Drag to reorder step"
+                      style={{ cursor: "grab", color: MUTED, fontSize: 13, lineHeight: 1, userSelect: "none", display: "inline-flex", alignItems: "center", padding: "0 1px" }}>⠿</span>
                     <Pill tone={i === 0 ? "accent" : "neutral"}>{i === 0 ? "Trigger col" : `Step ${i}`}</Pill>
                     <span style={{ flex: 1 }} />
                     <IconBtn title="Move left" onClick={() => moveColumn(i, -1)}>‹</IconBtn>
