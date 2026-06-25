@@ -568,37 +568,68 @@ function Field({ field, value, onChange, subjects, highlight }) {
 const PL_CSS = `
 .pl-editor{display:flex;flex-direction:column;gap:8px}
 .pl-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint)}
-.pl-row{display:flex;gap:8px;align-items:center}
-.pl-input{font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface,#fff);
-  border:1px solid var(--line);border-radius:8px;padding:7px 9px}
-.pl-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-.pl-label{flex:0 0 38%;min-width:0}
-.pl-url{flex:1;min-width:0}
-.pl-del{flex:0 0 auto;width:30px;height:30px;border-radius:7px;border:1px solid var(--line);
-  background:var(--surface,#fff);color:var(--ink-faint);cursor:pointer;font-size:12px}
-.pl-del:hover{background:#FBEBEA;color:var(--danger);border-color:#f0d4d0}
-.pl-add{align-self:flex-start;font-family:inherit;font-size:12px;font-weight:600;color:var(--ink-soft);
-  background:var(--surface,#fff);border:1px solid var(--line);border-radius:7px;padding:6px 10px;cursor:pointer}
-.pl-add:hover{border-color:#d8d4cc}
+.pl-pills{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pl-pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--accent);
+  background:var(--accent-soft);padding:3px 5px 3px 9px;border-radius:999px;max-width:100%}
+.pl-pill a{color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl-pill-x{border:none;background:none;color:var(--accent);cursor:pointer;font-size:12px;line-height:1;padding:0 2px}
+.pl-add{font-family:inherit;font-size:12px;font-weight:600;color:var(--ink);
+  background:var(--surface,#fff);border:1px solid var(--line);border-radius:8px;padding:6px 11px;cursor:pointer}
+.pl-add:hover{border-color:var(--accent);color:var(--accent)}
+.pl-draft-scrim{position:fixed;inset:0;background:rgba(43,42,39,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px}
+.pl-draft{background:var(--surface,#fff);border:1px solid var(--line);border-radius:14px;padding:18px 20px;width:100%;max-width:420px;box-shadow:0 16px 50px rgba(0,0,0,.28);display:flex;flex-direction:column;gap:12px}
+.pl-draft h3{font-family:Georgia,serif;font-size:18px;font-weight:600;margin:0;color:var(--accent)}
+.pl-draft label{display:flex;flex-direction:column;gap:4px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint)}
+.pl-draft input{font-family:inherit;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink);background:var(--surface,#fff);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.pl-draft input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.pl-draft-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.pl-draft-foot button{font-family:inherit;font-size:12.5px;font-weight:600;border-radius:8px;padding:8px 14px;cursor:pointer;border:1px solid var(--line);background:var(--surface,#fff);color:var(--ink)}
+.pl-draft-foot button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pl-draft-foot button.primary:disabled{opacity:.5;cursor:not-allowed}
 `;
 
-export function ProjectLinksEditor({ links, onChange }) {
+export function ProjectLinksEditor({ links, onChange, title = "Project links" }) {
   const list = links || [];
-  const set = (i, k, v) => onChange(list.map((l, idx) => (idx === i ? { ...l, [k]: v } : l)));
+  const [draft, setDraft] = useState(null); // { label, url }
+  const canAdd = draft && ((draft.label || "").trim() || (draft.url || "").trim());
   return (
     <div className="pl-editor">
       <style>{PL_CSS}</style>
-      <span className="pl-title">Project links</span>
-      {list.map((l, i) => (
-        <div className="pl-row" key={i}>
-          <input className="pl-input pl-label" placeholder="Label (e.g. Figma)" value={l.label || ""}
-            onChange={(e) => set(i, "label", e.target.value)} />
-          <input className="pl-input pl-url" placeholder="https://…" value={l.url || ""}
-            onChange={(e) => set(i, "url", e.target.value)} />
-          <button type="button" className="pl-del" title="Remove" onClick={() => onChange(list.filter((_, idx) => idx !== i))}>✕</button>
+      <span className="pl-title">{title}</span>
+      <div className="pl-pills">
+        {list.map((l, i) => {
+          const live = l.url && l.url !== "#";
+          return (
+            <span className="pl-pill" key={i}>
+              {live
+                ? <a href={l.url} target="_blank" rel="noopener noreferrer" title={l.url}><Link2 size={11} />{l.label || l.url}</a>
+                : <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Link2 size={11} />{l.label || "Link"}</span>}
+              <button type="button" className="pl-pill-x" title="Remove" onClick={() => onChange(list.filter((_, idx) => idx !== i))}>✕</button>
+            </span>
+          );
+        })}
+        <button type="button" className="pl-add" onClick={() => setDraft({ label: "", url: "" })}>+ Add link</button>
+      </div>
+      {draft && (
+        <div className="pl-draft-scrim" onClick={() => setDraft(null)}>
+          <div className="pl-draft" onClick={(e) => e.stopPropagation()}>
+            <h3>Add link</h3>
+            <label>Label
+              <input autoFocus value={draft.label} placeholder="e.g. Figma, Research doc"
+                onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))} />
+            </label>
+            <label>URL
+              <input value={draft.url} placeholder="https://…"
+                onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))} />
+            </label>
+            <div className="pl-draft-foot">
+              <button onClick={() => setDraft(null)}>Cancel</button>
+              <button className="primary" disabled={!canAdd}
+                onClick={() => { onChange([...list, { label: draft.label.trim(), url: draft.url.trim() }]); setDraft(null); }}>Add</button>
+            </div>
+          </div>
         </div>
-      ))}
-      <button type="button" className="pl-add" onClick={() => onChange([...list, { label: "", url: "" }])}>+ Add link</button>
+      )}
     </div>
   );
 }
@@ -1330,27 +1361,6 @@ export default function DecisionLog({
                     onChange={(e) => setMeta("workflowLink", e.target.value)} />
                 </label>
                 <ProjectLinksEditor links={log.projectLinks} onChange={(next) => setMeta("projectLinks", next)} />
-                {logsIndex.length > 0 && (
-                  <label className="field">
-                    <span className="field-label">Related decision logs</span>
-                    <span className="field-hint">For decisions that cascade across logs (e.g. a product-wide log that affects several workflows).</span>
-                    <div className="related-logs">
-                      {logsIndex.map((l) => {
-                        const on = (log.relatedLogs || []).includes(l.id);
-                        return (
-                          <button key={l.id} type="button" className={"related-log-chip" + (on ? " on" : "")}
-                            onClick={() => {
-                              const cur = log.relatedLogs || [];
-                              const next = on ? cur.filter((x) => x !== l.id) : [...cur, l.id];
-                              onRelatedLogsChange ? onRelatedLogsChange(next) : setMeta("relatedLogs", next);
-                            }}>
-                            {on ? "✓ " : "+ "}{l.title.replace(/^decision log:\s*/i, "")}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </label>
-                )}
               </div>
               <div className="settings-grid">
                 <label className="field">
