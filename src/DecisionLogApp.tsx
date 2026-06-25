@@ -644,7 +644,7 @@ export default function DecisionLog({
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const [subjectFilter, setSubjectFilter] = useState("All");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [sort, setSort] = useState({ key: "id", dir: "desc" });
 
   const [drawer, setDrawer] = useState(null); // entry being added/edited (form state)
@@ -681,7 +681,6 @@ export default function DecisionLog({
     const q = query.trim().toLowerCase();
     let rows = entries.filter((e) =>
       (statusFilter === "All" || e.status === statusFilter) &&
-      (subjectFilter === "All" || e.subject === subjectFilter) &&
       (!q || `${e.id} ${e.subject} ${e.decision} ${e.context} ${e.rationale} ${e.optionsConsidered} ${e.workflowStep} ${e.decisionOwner} ${e.notes || ""}`.toLowerCase().includes(q))
     );
     const { key, dir } = sort;
@@ -704,7 +703,7 @@ export default function DecisionLog({
         : String(bv).localeCompare(String(av));
     });
     return rows;
-  }, [entries, statusFilter, subjectFilter, sort, query]);
+  }, [entries, statusFilter, sort, query]);
 
   function toggleSort(key) {
     setSort((s) => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
@@ -928,21 +927,26 @@ export default function DecisionLog({
         </button>
 
         <div className="filters">
-          <input className="dl-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search decisions…" />
-          <label className="filter">
-            <span>Status</span>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option>All</option>
-              {STATUSES.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </label>
-          <label className="filter">
-            <span>Subject</span>
-            <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
-              <option>All</option>
-              {subjects.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </label>
+          <div className="dl-search-wrap">
+            <input className="dl-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search decisions…" />
+            <button type="button" className={"dl-filter-btn" + (statusFilter !== "All" ? " active" : "")}
+              title="Filter by status" onClick={() => setFilterOpen((o) => !o)}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
+              {statusFilter !== "All" && <span className="dl-filter-dot" />}
+            </button>
+            {filterOpen && (
+              <>
+                <div className="dl-filter-scrim" onClick={() => setFilterOpen(false)} />
+                <div className="dl-filter-pop">
+                  <div className="dl-filter-head">Status</div>
+                  {["All", ...STATUSES].map((s) => (
+                    <button key={s} type="button" className={"dl-filter-opt" + (statusFilter === s ? " sel" : "")}
+                      onClick={() => { setStatusFilter(s); setFilterOpen(false); }}>{s}</button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <span className="count">{view.length} of {entries.length}</span>
         </div>
       </div>
@@ -1454,9 +1458,24 @@ button.wf-link{border:none;border-bottom:1px solid var(--accent-soft);background
 .proj-links{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 18px}
 
 /* decisions search box */
+.dl-search-wrap{position:relative;display:inline-block}
 .dl-search{font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface);
-  border:1px solid var(--line);border-radius:8px;padding:6px 10px;width:180px}
+  border:1px solid var(--line);border-radius:8px;padding:6px 36px 6px 10px;width:230px}
 .dl-search:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.dl-filter-btn{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:26px;height:26px;
+  display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:6px;
+  background:transparent;color:var(--ink-faint);cursor:pointer}
+.dl-filter-btn:hover{color:var(--ink)}
+.dl-filter-btn.active{color:var(--accent);background:var(--accent-soft);border-color:var(--accent)}
+.dl-filter-dot{position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.dl-filter-scrim{position:fixed;inset:0;z-index:40}
+.dl-filter-pop{position:absolute;right:0;top:calc(100% + 5px);z-index:41;min-width:160px;background:var(--surface);
+  border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 10px 26px -10px rgba(0,0,0,.25);display:flex;flex-direction:column}
+.dl-filter-head{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);padding:6px 9px 3px}
+.dl-filter-opt{font-family:inherit;font-size:12.5px;font-weight:600;color:var(--ink);background:transparent;border:none;
+  border-radius:6px;padding:7px 9px;text-align:left;cursor:pointer}
+.dl-filter-opt:hover{background:var(--accent-tint)}
+.dl-filter-opt.sel{color:var(--accent);background:var(--accent-soft)}
 
 /* drawer populate + AI-filled highlight */
 .drawer-populate{align-self:flex-start}
