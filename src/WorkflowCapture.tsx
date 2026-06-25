@@ -861,8 +861,8 @@ export default function WorkflowCapture({
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const [decDrawerId, setDecDrawerId] = useState(null); // decision open in the editing drawer
-  const [dragCol, setDragCol] = useState(null); // index of the step column being dragged
-  const [dropCol, setDropCol] = useState(null); // index currently hovered as drop target
+  const [dragFlow, setDragFlow] = useState(null); // index of the flow tab being dragged
+  const [dropFlow, setDropFlow] = useState(null); // flow-tab index currently hovered as drop target
   const [wfStatusBanner, setWfStatusBanner] = useState(null); // { from, to, subject, workflowStep, anchor } after a status change
   const [focusCol, setFocusCol] = useState(null);
   const [decQuery, setDecQuery] = useState("");
@@ -970,10 +970,10 @@ export default function WorkflowCapture({
     if (j < 0 || j >= columns.length) return;
     setColumns((p) => { const n = [...p]; [n[idx], n[j]] = [n[j], n[idx]]; return n; });
   };
-  // Drag-and-drop reorder a step column from one position to another.
-  const reorderColumn = (from, to) => {
+  // Drag-and-drop reorder a flow tab from one position to another.
+  const reorderFlow = (from, to) => {
     if (from === to || from == null || to == null) return;
-    setColumns((p) => { const n = [...p]; const [moved] = n.splice(from, 1); n.splice(to, 0, moved); return n; });
+    setFlows((p) => { const n = [...p]; const [moved] = n.splice(from, 1); n.splice(to, 0, moved); return n; });
   };
 
   const renameColumn = (id, name) =>
@@ -1852,16 +1852,27 @@ export default function WorkflowCapture({
       })()}
       {/* Flow tabs: main flow + branch sub-flows */}
       <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10, flexWrap: "wrap", borderBottom: `1px solid ${BORDER}`, paddingBottom: 2 }}>
-        {flows.map((f) => {
+        {flows.map((f, i) => {
           const active = f.id === activeFlowId;
           const isSub = f.id !== "main";
           return (
-            <span key={f.id} style={{
+            <span key={f.id}
+              onDragOver={(e) => { if (dragFlow != null) { e.preventDefault(); if (dropFlow !== i) setDropFlow(i); } }}
+              onDrop={(e) => { e.preventDefault(); reorderFlow(dragFlow, i); setDragFlow(null); setDropFlow(null); }}
+              style={{
               display: "inline-flex", alignItems: "center",
               background: active ? ACCENT_SOFT : "transparent",
               borderBottom: `2px solid ${active ? ACCENT : "transparent"}`,
               borderRadius: "6px 6px 0 0",
+              boxShadow: (dropFlow === i && dragFlow != null && dragFlow !== i) ? `inset ${dragFlow < i ? "-2px" : "2px"} 0 0 ${ACCENT}` : "none",
+              opacity: dragFlow === i ? 0.5 : 1,
+              transition: "box-shadow .15s, opacity .15s",
             }}>
+              <span draggable
+                onDragStart={(e) => { setDragFlow(i); try { e.dataTransfer.effectAllowed = "move"; } catch { /* noop */ } }}
+                onDragEnd={() => { setDragFlow(null); setDropFlow(null); }}
+                title="Drag to reorder flow"
+                style={{ cursor: "grab", color: MUTED, fontSize: 11.5, lineHeight: 1, userSelect: "none", padding: "0 1px 0 8px", display: "inline-flex", alignItems: "center" }}>⠿</span>
               {active && isSub ? (
                 // Active sub-flow tab is an inline field — click and rewrite to
                 // rename; changes autosave as you type.
@@ -1875,14 +1886,14 @@ export default function WorkflowCapture({
                   style={{
                     fontFamily: SANS, fontSize: 13, fontWeight: 600, color: ACCENT,
                     background: "transparent", border: "none", outline: "none",
-                    padding: "7px 4px 7px 12px",
+                    padding: "7px 4px 7px 5px",
                   }}
                 />
               ) : (
                 <button onClick={() => setActiveFlowId(f.id)} style={{
                   fontFamily: SANS, fontSize: 13, fontWeight: 600, cursor: "pointer",
                   background: "transparent", color: active ? ACCENT : MUTED,
-                  border: "none", borderRadius: "6px 6px 0 0", padding: "7px 12px",
+                  border: "none", borderRadius: "6px 6px 0 0", padding: "7px 12px 7px 5px",
                 }}>{f.name}</button>
               )}
               {isSub && active && (
@@ -1909,25 +1920,14 @@ export default function WorkflowCapture({
                 textTransform: "uppercase", color: MUTED,
               }}>Field</th>
               {columns.map((col, i) => (
-                <th key={col.id} id={"wfcol-" + col.id}
-                  onDragOver={(e) => { if (dragCol != null) { e.preventDefault(); if (dropCol !== i) setDropCol(i); } }}
-                  onDrop={(e) => { e.preventDefault(); reorderColumn(dragCol, i); setDragCol(null); setDropCol(null); }}
-                  style={{
-                  background: dragCol === i ? ACCENT_SOFT : (focusCol === col.id ? ACCENT_SOFT : "#F5F3EF"), borderBottom: `2px solid ${ACCENT}`,
+                <th key={col.id} id={"wfcol-" + col.id} style={{
+                  background: focusCol === col.id ? ACCENT_SOFT : "#F5F3EF", borderBottom: `2px solid ${ACCENT}`,
                   borderRight: i < columns.length - 1 ? `1px solid ${BORDER}` : "none",
-                  boxShadow: (dropCol === i && dragCol != null && dragCol !== i)
-                    ? `inset ${dragCol < i ? "-3px" : "3px"} 0 0 ${ACCENT}`
-                    : (focusCol === col.id ? `inset 0 0 0 2px ${ACCENT}` : "none"),
-                  opacity: dragCol === i ? 0.5 : 1,
-                  transition: "background .3s, box-shadow .15s, opacity .15s",
+                  boxShadow: focusCol === col.id ? `inset 0 0 0 2px ${ACCENT}` : "none",
+                  transition: "background .3s, box-shadow .3s",
                   padding: "8px 12px", minWidth: 250, verticalAlign: "top",
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                    <span draggable
-                      onDragStart={(e) => { setDragCol(i); try { e.dataTransfer.effectAllowed = "move"; } catch { /* noop */ } }}
-                      onDragEnd={() => { setDragCol(null); setDropCol(null); }}
-                      title="Drag to reorder step"
-                      style={{ cursor: "grab", color: MUTED, fontSize: 13, lineHeight: 1, userSelect: "none", display: "inline-flex", alignItems: "center", padding: "0 1px" }}>⠿</span>
                     <Pill tone={i === 0 ? "accent" : "neutral"}>{i === 0 ? "Trigger col" : `Step ${i}`}</Pill>
                     <span style={{ flex: 1 }} />
                     <IconBtn title="Move left" onClick={() => moveColumn(i, -1)}>‹</IconBtn>
