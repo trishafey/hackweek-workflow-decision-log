@@ -888,10 +888,12 @@ export default function DecisionLog({
             <nav className="crumbs" aria-label="Breadcrumb">
               <button className="crumb-link" onClick={onBack}>Decision Logs</button>
               <span className="crumb-sep">/</span>
-              <span className="crumb-current">{title}</span>
+              <span className="crumb-current">{title.replace(/^decision log:\s*/i, "")}</span>
             </nav>
           )}
-          <h1>{title}</h1>
+          <h1 style={{ fontFamily: 'Georgia,"Iowan Old Style","Palatino Linotype",serif', fontWeight: 600, fontSize: 34, lineHeight: 1.1, letterSpacing: "-0.01em", color: "#1F3A34", margin: 0 }}>
+            Decision log: {title.replace(/^decision log:\s*/i, "")}
+          </h1>
           <p className="sub">{subtitle}</p>
         </div>
         <div className="topbar-actions">

@@ -1262,7 +1262,7 @@ export default function WorkflowCapture({
       {/* ---------- Page header ---------- */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 20 }}>
         <div>
-          <h1 style={{ fontFamily: SERIF, fontWeight: 500, fontSize: 34, lineHeight: 1.1, margin: 0, color: ACCENT, letterSpacing: "-0.01em" }}>
+          <h1 style={{ fontFamily: SERIF, fontWeight: 600, fontSize: 34, lineHeight: 1.1, margin: 0, color: ACCENT, letterSpacing: "-0.01em" }}>
             Workflow: {info.workflow || "Untitled workflow"}
           </h1>
           <p style={{ margin: "6px 0 0", fontSize: 13.5, color: MUTED }}>
@@ -1444,7 +1444,7 @@ export default function WorkflowCapture({
       {/* ---------- Capture grid / Tree diagram ---------- */}
       <div style={fullscreen ? { position: "fixed", inset: 0, zIndex: 80, background: "#FBFAF8", padding: "14px 16px", overflow: "auto" } : undefined}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
-        <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>{view === "grid" ? "Capture grid" : "Tree diagram"}</h2>
+        <h2 style={{ fontFamily: SERIF, fontSize: 23, fontWeight: 600, margin: 0, color: ACCENT, letterSpacing: "-0.01em" }}>{view === "grid" ? "Capture grid" : "Tree diagram"}</h2>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <div style={{ display: "inline-flex", border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
             {[["grid", "Grid"], ["diagram", "Tree diagram"]].map(([v, lbl]) => (
@@ -1705,9 +1705,9 @@ export default function WorkflowCapture({
       </div>
 
       {/* ---------- Decisions section ---------- */}
-      <div style={{ marginTop: 30 }}>
+      <div style={{ marginTop: 36, paddingTop: 30, borderTop: `1px solid ${BORDER}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-          <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>Decisions</h2>
+          <h2 style={{ fontFamily: SERIF, fontSize: 23, fontWeight: 600, margin: 0, color: ACCENT, letterSpacing: "-0.01em" }}>Decisions</h2>
           <Pill tone="neutral">{decisions.length} logged</Pill>
           <span style={{ flex: 1 }} />
           {decisions.length > 0 && (

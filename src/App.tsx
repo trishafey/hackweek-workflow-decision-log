@@ -114,11 +114,26 @@ function RowMenu({ archived, onArchive, onDelete, onDuplicate, onRename }) {
   );
 }
 
-function HomeNav({ active, onLogs, onWorkflows }) {
+// Persistent top nav rendered on every page (self-contained styles so it works
+// on the home tables and the workflow / decision-log detail pages alike).
+function GlobalNav({ active, onLogs, onWorkflows }) {
+  const item = (label, isActive, onClick) => (
+    <button onClick={onClick} style={{
+      fontFamily: 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif',
+      fontSize: 14, fontWeight: 600, cursor: "pointer", background: "none",
+      border: "none", borderBottom: `2px solid ${isActive ? "#1F3A34" : "transparent"}`,
+      color: isActive ? "#1F3A34" : "#94908A", padding: "14px 2px 12px", transition: "color .12s",
+    }}>{label}</button>
+  );
   return (
-    <nav className="home-nav" aria-label="Primary">
-      <button className={"home-nav-link" + (active === "logs" ? " active" : "")} onClick={onLogs}>Decision Logs</button>
-      <button className={"home-nav-link" + (active === "workflows" ? " active" : "")} onClick={onWorkflows}>Workflows</button>
+    <nav aria-label="Primary" style={{
+      position: "sticky", top: 0, zIndex: 60, display: "flex", alignItems: "center", gap: 22,
+      padding: "0 clamp(16px,5vw,64px)", background: "rgba(250,249,246,0.92)",
+      backdropFilter: "saturate(180%) blur(8px)", WebkitBackdropFilter: "saturate(180%) blur(8px)",
+      borderBottom: "1px solid #E7E4DD",
+    }}>
+      {item("Workflows", active === "workflows", onWorkflows)}
+      {item("Decision Logs", active === "logs", onLogs)}
     </nav>
   );
 }
@@ -135,7 +150,6 @@ function LogsHome({ logs, onOpen, onCreate, onWorkflows, onLogs, onArchive, onDe
   return (
     <div className="home-root">
       <style>{HOME_CSS}</style>
-      <HomeNav active="logs" onLogs={onLogs} onWorkflows={onWorkflows} />
       <header className="home-head">
         <div>
           <h1>Decision Logs</h1>
@@ -265,7 +279,6 @@ function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onWorkflows, onArc
   return (
     <div className="home-root">
       <style>{HOME_CSS}</style>
-      <HomeNav active="workflows" onLogs={onLogs} onWorkflows={onWorkflows} />
       <header className="home-head">
         <div>
           <h1>Workflows</h1>
@@ -518,11 +531,15 @@ export default function App() {
     setRoute({ view: "workflow", id });
   };
 
+  const goLogs = () => setRoute({ view: "logs" });
+  const goWorkflows = () => setRoute({ view: "workflows" });
+
+  let body;
   if (route.view === "workflow") {
     const wf = workflows.find((w) => w.id === route.id);
     // Prefer saved content; else seed (outfit) or a blank workflow.
     const initial = wf?.content ?? (wf && wf.seed === "outfit" ? undefined : blankWorkflow(wf?.name, wf?.product, wf?.owner));
-    return (
+    body = (
       <WorkflowCapture
         key={route.id}
         initial={initial}
@@ -542,28 +559,33 @@ export default function App() {
         onOpenLog={(id) => setRoute({ view: "log", id })}
       />
     );
-  }
-
-  if (route.view === "workflows") {
-    return <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={() => setRoute({ view: "logs" })} onWorkflows={() => setRoute({ view: "workflows" })} onArchive={setWorkflowArchived} onDelete={deleteWorkflow} onDuplicate={duplicateWorkflow} onRename={renameWorkflow} />;
-  }
-
-  if (route.view === "log") {
+  } else if (route.view === "workflows") {
+    body = <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={goLogs} onWorkflows={goWorkflows} onArchive={setWorkflowArchived} onDelete={deleteWorkflow} onDuplicate={duplicateWorkflow} onRename={renameWorkflow} />;
+  } else if (route.view === "log") {
     const log = logs.find((l) => l.id === route.id);
-    if (!log) return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} onRename={renameLog} />;
-    return (
-      <DecisionLog
-        key={log.id}
-        log={log}
-        subtitle={SUBTITLE}
-        onChange={(updater) => updateLog(log.id, updater)}
-        onBack={() => setRoute({ view: "logs" })}
-        onOpenWorkflow={(step, flowId) => setRoute({ view: "workflow", id: log.workflowView, focusStep: step, focusFlowId: flowId })}
-      />
-    );
+    body = !log
+      ? <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={goWorkflows} onLogs={goLogs} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} onRename={renameLog} />
+      : (
+        <DecisionLog
+          key={log.id}
+          log={log}
+          subtitle={SUBTITLE}
+          onChange={(updater) => updateLog(log.id, updater)}
+          onBack={() => setRoute({ view: "logs" })}
+          onOpenWorkflow={(step, flowId) => setRoute({ view: "workflow", id: log.workflowView, focusStep: step, focusFlowId: flowId })}
+        />
+      );
+  } else {
+    body = <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={goWorkflows} onLogs={goLogs} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} onRename={renameLog} />;
   }
 
-  return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} onRename={renameLog} />;
+  const navActive = (route.view === "workflow" || route.view === "workflows") ? "workflows" : "logs";
+  return (
+    <>
+      <GlobalNav active={navActive} onLogs={goLogs} onWorkflows={goWorkflows} />
+      {body}
+    </>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -589,7 +611,7 @@ const HOME_CSS = `
 .home-nav-link.active{color:var(--accent);border-bottom-color:var(--accent)}
 .home-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
 .home-head h1{font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif;font-weight:600;
-  letter-spacing:-.01em;margin:0;font-size:32px;line-height:1.1}
+  letter-spacing:-.01em;margin:0;font-size:34px;line-height:1.1;color:var(--accent)}
 .home-head p{margin:8px 0 0;color:var(--ink-soft);font-size:14px;max-width:54ch}
 .home-head-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .hm-link{background:none;border:none;padding:0;font:inherit;font-size:13px;font-weight:600;
