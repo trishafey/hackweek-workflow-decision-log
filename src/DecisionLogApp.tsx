@@ -14,6 +14,8 @@ const STATUSES = [
   "Future state", "Rejected", "Descoped", "Deprecated",
 ];
 
+export const STATUS_HELP = "Decision statuses:\nProposed — raised, not yet reviewed\nUnder review — being evaluated\nPrioritized — accepted, queued for work\nActive — in progress / in effect\nFuture state — planned for later\nRejected — decided against\nDescoped — removed from current scope\nDeprecated — no longer in use";
+
 const STATUS_STYLE = {
   "Proposed":     { bg: "#EEF1F4", fg: "#475569", dot: "#94A3B8" },
   "Under review": { bg: "#FBF3E2", fg: "#8A6A12", dot: "#D9A526" },
@@ -44,7 +46,7 @@ const ID_DESC = "Project code (2–3 letters) · workflow code (2–3 letters) �
 
 const FIELDS = [
   { key: "date", label: "Date", type: "date", desc: "When the decision was made." },
-  { key: "status", label: "Status", type: "status", desc: "The current status of the decision." },
+  { key: "status", label: "Status", type: "status", desc: STATUS_HELP },
   { key: "subject", label: "Subject", type: "subject", desc: "What the decision is about — a controlled tag, used for filtering." },
   { key: "decision", label: "Decision", type: "textarea", desc: "A clear, concise statement of what was decided." },
   { key: "context", label: "Context", type: "textarea", desc: "What problem or trigger led to this decision?\nInclude constraints, assumptions, or the scenario." },

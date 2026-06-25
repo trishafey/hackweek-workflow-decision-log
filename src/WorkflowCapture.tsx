@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import CreateLogModal from "./CreateLogModal";
-import { FILLABLE_LOG, suggestLogField } from "./DecisionLogApp";
+import { FILLABLE_LOG, suggestLogField, STATUS_HELP } from "./DecisionLogApp";
 import WorkflowDiagram from "./WorkflowDiagram";
 import * as XLSX from "xlsx";
 
@@ -663,7 +663,7 @@ function DecisionCard({ d, onChange, onDelete, statusStyle, anchorRowLabel, flow
             onChange={(e) => set("date", e.target.value)} />
         </div>
         <div>
-          <label style={labelStyle}>Status</label>
+          <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 5 }}>Status<InfoDot text={STATUS_HELP} /></label>
           <select value={d.status || "Proposed"} onChange={(e) => set("status", e.target.value)}
             style={{ ...inputStyle, cursor: "pointer" }}>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
