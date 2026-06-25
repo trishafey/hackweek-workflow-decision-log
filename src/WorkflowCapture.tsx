@@ -732,7 +732,7 @@ const subIdList = (subflowsObj, colId) => {
 export default function WorkflowCapture({
   initial, focusStep, focusFlowId, onWorkflowsHome, projectLinks = [],
   logsIndex = [], existingLogCodes = [], onCreateLog, onAddToLog, onUpdateLogEntries, onReplaceLogEntries, onOpenLog, logEntriesById = {}, onContentChange, startInfoEditing = false,
-  workflowsIndex = [], onOpenWorkflow, fieldSuggestions = {}, relatedIds = [], onRelatedChange,
+  workflowsIndex = [], onOpenWorkflow, fieldSuggestions = {}, relatedIds = [], onRelatedChange, linkedLogLinks = [],
 }) {
   const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
   const [info, setInfo] = useState(init.info);
@@ -1629,16 +1629,24 @@ export default function WorkflowCapture({
       )}
 
       {/* ---------- Links visible above the capture grid ---------- */}
-      {(links.length > 0 || linkedLog || relatedList.length > 0) && (
+      {(() => {
+        // Merge this workflow's links with the linked log's links (secondary,
+        // shared both ways). The decision log shows as a primary tag.
+        const seen = new Set();
+        const mergedLinks = [...links, ...linkedLogLinks]
+          .filter((pl) => pl && (pl.url || pl.label))
+          .filter((pl) => { const k = (pl.url || "") + "|" + (pl.label || ""); if (seen.has(k)) return false; seen.add(k); return true; });
+        if (!(mergedLinks.length || linkedLog || relatedList.length)) return null;
+        return (
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 18 }}>
           {linkedLog && (
-            <button type="button" onClick={openLinkedLog} title="Open decision log" style={{
+            <button type="button" onClick={openLinkedLog} title={`Open decision log: ${linkedLog.title}`} style={{
               display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600,
-              color: ACCENT, background: ACCENT_SOFT, padding: "4px 11px", borderRadius: 999,
-              border: `1px solid ${ACCENT}`, cursor: "pointer", fontFamily: SANS,
-            }}><LinkGlyph />{linkedLog.title}</button>
+              color: "#FDFCFA", background: ACCENT, padding: "5px 12px", borderRadius: 999,
+              border: "none", cursor: "pointer", fontFamily: SANS,
+            }}><LinkGlyph />Decision log</button>
           )}
-          {links.map((pl, i) => (
+          {mergedLinks.map((pl, i) => (
             <a key={i} href={pl.url} target="_blank" rel="noopener noreferrer" title={pl.url} style={{
               display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600,
               color: ACCENT, background: ACCENT_SOFT, padding: "4px 11px", borderRadius: 999, textDecoration: "none", fontFamily: SANS,
@@ -1661,7 +1669,8 @@ export default function WorkflowCapture({
             </select>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ---------- Capture grid / Tree diagram ---------- */}
       <div style={fullscreen ? { position: "fixed", inset: 0, zIndex: 80, background: "#FBFAF8", padding: "14px 16px", overflow: "auto" } : undefined}>

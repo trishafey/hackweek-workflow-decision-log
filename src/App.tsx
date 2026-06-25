@@ -571,11 +571,19 @@ export default function App() {
   const goLogs = () => setRoute({ view: "logs" });
   const goWorkflows = () => setRoute({ view: "workflows" });
 
+  // Workflow ↔ decision-log linkage + shared external links.
+  const logIdFromWorkflow = (w) => { const m = /#\/log\/([^?\s]+)/.exec((w && w.content && w.content.info && w.content.info.logLink) || ""); return m ? decodeURIComponent(m[1]) : null; };
+  const workflowForLog = (logId) => workflows.find((w) => logIdFromWorkflow(w) === logId)
+    || workflows.find((w) => w.id === ((logs.find((l) => l.id === logId) || {}).workflowView));
+  const wfLinks = (w) => (w && (w.content && w.content.links ? w.content.links : w.projectLinks)) || [];
+
   let body;
   if (route.view === "workflow") {
     const wf = workflows.find((w) => w.id === route.id);
     // Prefer saved content; else seed (outfit) or a blank workflow.
     const initial = wf?.content ?? (wf && wf.seed === "outfit" ? undefined : blankWorkflow(wf?.name, wf?.product, wf?.owner));
+    const wfLogId = logIdFromWorkflow(wf);
+    const wfLog = wfLogId ? logs.find((l) => l.id === wfLogId) : null;
     body = (
       <WorkflowCapture
         key={route.id}
@@ -599,12 +607,14 @@ export default function App() {
         fieldSuggestions={fieldSuggestions}
         relatedIds={wf?.related ?? wf?.content?.related ?? []}
         onRelatedChange={(ids) => setWorkflowRelated(route.id, ids)}
+        linkedLogLinks={wfLog?.projectLinks || []}
       />
     );
   } else if (route.view === "workflows") {
     body = <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={goLogs} onWorkflows={goWorkflows} onArchive={setWorkflowArchived} onDelete={deleteWorkflow} onDuplicate={duplicateWorkflow} onRename={renameWorkflow} />;
   } else if (route.view === "log") {
     const log = logs.find((l) => l.id === route.id);
+    const lw = log ? workflowForLog(log.id) : null;
     body = !log
       ? <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={goWorkflows} onLogs={goLogs} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} onRename={renameLog} />
       : (
@@ -614,7 +624,12 @@ export default function App() {
           subtitle={SUBTITLE}
           onChange={(updater) => updateLog(log.id, updater)}
           onBack={() => setRoute({ view: "logs" })}
-          onOpenWorkflow={(step, flowId) => setRoute({ view: "workflow", id: log.workflowView, focusStep: step, focusFlowId: flowId })}
+          onOpenWorkflow={(step, flowId) => setRoute({ view: "workflow", id: (lw && lw.id) || log.workflowView, focusStep: step, focusFlowId: flowId })}
+          linkedWorkflow={lw ? { id: lw.id, name: lw.name } : null}
+          onOpenLinkedWorkflow={lw ? (() => setRoute({ view: "workflow", id: lw.id })) : null}
+          extraLinks={wfLinks(lw)}
+          logsIndex={logs.filter((l) => l.id !== log.id).map((l) => ({ id: l.id, title: l.title, code: `${l.settings.prefix}-${l.settings.workflow}` }))}
+          onRelatedLogsChange={(ids) => updateLog(log.id, (p) => ({ ...p, relatedLogs: ids }))}
         />
       );
   } else {

@@ -633,6 +633,11 @@ export default function DecisionLog({
   subtitle = "A record of what was decided, and why.",
   onBack,
   onOpenWorkflow,
+  linkedWorkflow = null,
+  onOpenLinkedWorkflow,
+  extraLinks = [],
+  logsIndex = [],
+  onRelatedLogsChange,
 }) {
   // Controlled by the parent App so created logs and edits persist across navigation.
   const title = log.title;
@@ -704,6 +709,14 @@ export default function DecisionLog({
     });
     return rows;
   }, [entries, statusFilter, sort, query]);
+
+  // External links shown on the log = this log's own links + the linked
+  // workflow's links, minus in-app workflow links (covered by the Workflow tag).
+  const mergedLinks = (() => {
+    const all = [...(log.projectLinks || []), ...extraLinks].filter((pl) => pl && (pl.url || pl.label) && !/#\/workflow\//.test(pl.url || ""));
+    const seen = new Set();
+    return all.filter((pl) => { const k = (pl.url || "") + "|" + (pl.label || ""); if (seen.has(k)) return false; seen.add(k); return true; });
+  })();
 
   function toggleSort(key) {
     setSort((s) => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
@@ -951,10 +964,15 @@ export default function DecisionLog({
         </div>
       </div>
 
-      {/* Project links */}
-      {(log.projectLinks || []).length > 0 && (
+      {/* Linked workflow (primary) + external links (secondary, shared with the workflow) */}
+      {(linkedWorkflow || mergedLinks.length > 0) && (
         <div className="proj-links">
-          {(log.projectLinks || []).map((pl, i) => {
+          {linkedWorkflow && onOpenLinkedWorkflow && (
+            <button type="button" className="link-pill link-pill-primary" title={`Open workflow: ${linkedWorkflow.name}`} onClick={onOpenLinkedWorkflow}>
+              <Link2 size={11} /> Workflow
+            </button>
+          )}
+          {mergedLinks.map((pl, i) => {
             const live = pl.url && pl.url !== "#";
             if (!live) {
               return (
@@ -1261,6 +1279,27 @@ export default function DecisionLog({
                     onChange={(e) => setMeta("workflowLink", e.target.value)} />
                 </label>
                 <ProjectLinksEditor links={log.projectLinks} onChange={(next) => setMeta("projectLinks", next)} />
+                {logsIndex.length > 0 && (
+                  <label className="field">
+                    <span className="field-label">Related decision logs</span>
+                    <span className="field-hint">For decisions that cascade across logs (e.g. a product-wide log that affects several workflows).</span>
+                    <div className="related-logs">
+                      {logsIndex.map((l) => {
+                        const on = (log.relatedLogs || []).includes(l.id);
+                        return (
+                          <button key={l.id} type="button" className={"related-log-chip" + (on ? " on" : "")}
+                            onClick={() => {
+                              const cur = log.relatedLogs || [];
+                              const next = on ? cur.filter((x) => x !== l.id) : [...cur, l.id];
+                              onRelatedLogsChange ? onRelatedLogsChange(next) : setMeta("relatedLogs", next);
+                            }}>
+                            {on ? "✓ " : "+ "}{l.title.replace(/^decision log:\s*/i, "")}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </label>
+                )}
               </div>
               <div className="settings-grid">
                 <label className="field">
@@ -1455,6 +1494,14 @@ button.wf-link{border:none;border-bottom:1px solid var(--accent-soft);background
 .link-pill svg{flex-shrink:0}
 .link-pill-tbd{color:var(--ink-faint);background:var(--line-soft);cursor:default}
 .link-pill-tbd:hover{background:var(--line-soft)}
+.link-pill-primary{color:#fff;background:var(--accent);border:none;cursor:pointer;font-family:inherit}
+.link-pill-primary:hover{background:var(--accent-ink)}
+.field-hint{font-size:11.5px;color:var(--ink-faint);font-weight:400;margin:2px 0 6px}
+.related-logs{display:flex;flex-wrap:wrap;gap:6px}
+.related-log-chip{font-family:inherit;font-size:12px;font-weight:600;color:var(--ink-soft);background:var(--surface);
+  border:1px solid var(--line);border-radius:999px;padding:5px 11px;cursor:pointer;transition:.12s}
+.related-log-chip:hover{border-color:var(--accent);color:var(--accent)}
+.related-log-chip.on{color:var(--accent);background:var(--accent-soft);border-color:var(--accent)}
 .proj-links{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 18px}
 
 /* decisions search box */
