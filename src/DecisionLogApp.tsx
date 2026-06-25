@@ -884,13 +884,6 @@ export default function DecisionLog({
       {/* Header */}
       <header className="topbar">
         <div className="brand">
-          {onBack && (
-            <nav className="crumbs" aria-label="Breadcrumb">
-              <button className="crumb-link" onClick={onBack}>Decision Logs</button>
-              <span className="crumb-sep">/</span>
-              <span className="crumb-current">{title.replace(/^decision log:\s*/i, "")}</span>
-            </nav>
-          )}
           <h1 style={{ fontFamily: 'Georgia,"Iowan Old Style","Palatino Linotype",serif', fontWeight: 600, fontSize: 34, lineHeight: 1.1, letterSpacing: "-0.01em", color: "#1F3A34", margin: 0 }}>
             Decision log: {title.replace(/^decision log:\s*/i, "")}
           </h1>
@@ -1387,9 +1380,9 @@ const CSS = `
 .btn.secondary{background:var(--surface);border-color:var(--accent);color:var(--accent)}
 .btn.secondary:hover{background:var(--accent-tint)}
 .btn.secondary:disabled{opacity:.5;cursor:not-allowed}
-.btn.tertiary{background:transparent;border-color:transparent;color:var(--ink-faint)}
-.btn.tertiary:hover{color:var(--accent);background:var(--accent-tint)}
-.btn.tertiary:disabled{opacity:.5;cursor:not-allowed;background:transparent;color:var(--ink-faint)}
+.btn.tertiary{background:transparent;border-color:transparent;color:var(--accent)}
+.btn.tertiary:hover{color:var(--accent-ink);background:var(--accent-tint)}
+.btn.tertiary:disabled{cursor:not-allowed;background:transparent;color:var(--accent);opacity:.85}
 .btn.ghost{background:var(--surface);border-color:var(--line);color:var(--ink-soft)}
 .btn.ghost:hover{border-color:#d8d4cc;background:#fff}
 .btn.ghost.danger{color:var(--danger)}

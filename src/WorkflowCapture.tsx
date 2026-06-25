@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import CreateLogModal from "./CreateLogModal";
 import { FILLABLE_LOG, suggestLogField } from "./DecisionLogApp";
 import WorkflowDiagram from "./WorkflowDiagram";
+import * as XLSX from "xlsx";
 
 // A 16x16 chevron used for every collapse/expand toggle. Base points down;
 // pass `rotate` (degrees) to point it elsewhere for the closed/open state.
@@ -40,25 +41,24 @@ function InfoDot({ text }) {
         onBlur={() => setShow(false)}
         onClick={(e) => { e.stopPropagation(); place(); setShow((s) => !s); }}
         style={{
-          flex: "0 0 auto", width: 15, height: 15, borderRadius: "50%",
-          border: "1px solid #C9C3B8", color: "#8A857C",
-          display: "inline-flex", alignItems: "center", justifyContent: "center",
-          cursor: "help", background: "transparent",
+          flex: "0 0 auto", display: "inline-flex", alignItems: "center", justifyContent: "center",
+          color: show ? ACCENT : "#B6B1A8", cursor: "help", lineHeight: 0, transition: "color .12s",
         }}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block" }}>
-          <line x1="12" y1="11" x2="12" y2="16.5" />
-          <line x1="12" y1="7" x2="12" y2="7" />
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block" }}>
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
         </svg>
       </span>
       {show && pos && (
         <span style={{
           position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)",
-          zIndex: 200, maxWidth: 240, background: "#2B2A27", color: "#FBFAF8",
+          zIndex: 200, maxWidth: 248, background: "#1C1B19", color: "#fff",
           fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
-          fontSize: 11.5, lineHeight: 1.4, fontWeight: 500, padding: "7px 10px", borderRadius: 8,
-          boxShadow: "0 8px 22px -8px rgba(0,0,0,0.4)", pointerEvents: "none",
+          fontSize: 11.5, lineHeight: 1.5, fontWeight: 400, padding: "9px 12px", borderRadius: 9,
+          boxShadow: "0 12px 28px -10px rgba(0,0,0,0.45)", pointerEvents: "none",
         }}>{text}</span>
       )}
     </>
@@ -877,6 +877,7 @@ export default function WorkflowCapture({
   const setRelatedAnd = (updater) => setRelated((r) => { const n = (typeof updater === "function" ? updater(r) : updater).filter(Boolean); if (onRelatedChange) onRelatedChange(n); return n; });
   const [users, setUsers] = useState(() => (init.users || [])); // [{id,type,group,role,description}]
   const fileRef = useRef(null);
+  const xlsxRef = useRef(null);
 
   // Report content up (debounced) so the App can persist it to the database.
   useEffect(() => {
@@ -1255,7 +1256,7 @@ export default function WorkflowCapture({
   const exportWorkflow = () => {
     download(
       `workflow-${slug(info.workflow)}.json`,
-      JSON.stringify({ kind: "workflow-capture", version: 3, info, flows, decisions }, null, 2)
+      JSON.stringify({ kind: "workflow-capture", version: 3, info, flows, decisions, users }, null, 2)
     );
     flash("Workflow exported");
   };
@@ -1280,6 +1281,7 @@ export default function WorkflowCapture({
         setInfo(d.info || {});
         setFlows(nextFlows);
         setActiveFlowId(nextFlows[0].id);
+        setUsers(d.users || []);
         setDecisions(d.decisions || []);
         decIdRef.current = (d.decisions || []).reduce((m, x) => {
           const n = parseInt(String(x.id).replace(/\D/g, ""), 10);
@@ -1306,6 +1308,68 @@ export default function WorkflowCapture({
     });
     download(`workflow-${slug(info.workflow)}.csv`, [...infoLines, ...gridLines].join("\n"), "text/csv");
     flash("Grid CSV exported (info + flows)");
+  };
+
+  // ----- Excel (.xlsx) export / import -----
+  const exportExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const infoAoa = [["Field", "Value"], ...INFO_FIELDS.map((f) => [f.label, info[f.key] || ""])];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(infoAoa), "Info");
+    const usersAoa = [["Type", "Business area / partner", "Role", "What they typically do"],
+      ...users.map((u) => [u.type || "", u.group || "", u.role || "", u.description || ""])];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(usersAoa), "Users");
+    const used = new Set(["Info", "Users"]);
+    flows.forEach((f) => {
+      const base = (f.name || "Flow").slice(0, 28).replace(/[\\/?*[\]:]/g, " ");
+      let nm = base || "Flow", i = 2;
+      while (used.has(nm)) nm = `${base} ${i++}`.slice(0, 31);
+      used.add(nm);
+      const aoa = [["Field", ...f.columns.map((c) => c.name)],
+        ...ROWS.map((row) => [row.label, ...f.columns.map((c) => f.cells[c.id]?.[row.key] || "")])];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), nm);
+    });
+    XLSX.writeFile(wb, `workflow-${slug(info.workflow)}.xlsx`);
+    flash("Workflow exported to Excel");
+  };
+
+  const importExcel = (file) => {
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const wb = XLSX.read(r.result, { type: "array" });
+        const labelToKey = Object.fromEntries(INFO_FIELDS.map((f) => [f.label.toLowerCase(), f.key]));
+        const rowLabelToKey = Object.fromEntries(ROWS.map((rw) => [rw.label.toLowerCase(), rw.key]));
+        const newInfo = { ...info }; const newUsers = []; const newFlows = [];
+        wb.SheetNames.forEach((sn) => {
+          const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, blankrows: false });
+          if (sn === "Info") {
+            aoa.slice(1).forEach((row) => { const k = labelToKey[String(row[0] || "").toLowerCase()]; if (k) newInfo[k] = row[1] != null ? String(row[1]) : ""; });
+          } else if (sn === "Users") {
+            aoa.slice(1).forEach((row, i) => { if (row[0] || row[1] || row[2] || row[3]) newUsers.push({ id: "u-imp-" + i, type: String(row[0] || "internal").toLowerCase(), group: String(row[1] || ""), role: String(row[2] || ""), description: String(row[3] || "") }); });
+          } else {
+            const header = aoa[0] || [];
+            const cols = header.slice(1).map((nm, ci) => ({ id: "c" + ci, name: String(nm || ("Step " + (ci + 1))) }));
+            if (!cols.length) return;
+            const cells = {};
+            aoa.slice(1).forEach((row) => {
+              const rk = rowLabelToKey[String(row[0] || "").toLowerCase()]; if (!rk) return;
+              cols.forEach((c, ci) => { const v = row[ci + 1]; if (v != null && String(v) !== "") cells[c.id] = { ...(cells[c.id] || {}), [rk]: String(v) }; });
+            });
+            const isMain = newFlows.length === 0;
+            newFlows.push({ id: isMain ? "main" : "flow-imp-" + newFlows.length, name: isMain ? "Main flow" : sn, columns: cols, cells, subflows: {}, nextId: cols.length });
+          }
+        });
+        if (!newFlows.length) throw new Error("no grid");
+        setInfo(newInfo);
+        setUsers(newUsers);
+        setFlows(newFlows);
+        setActiveFlowId(newFlows[0].id);
+        flash("Workflow imported from Excel");
+      } catch {
+        flash("Couldn't read that Excel file.");
+      }
+    };
+    r.readAsArrayBuffer(file);
   };
 
   const labelStyle = {
@@ -1341,14 +1405,6 @@ export default function WorkflowCapture({
         input.wf-date::-webkit-date-and-time-value{ text-align:left; margin:0; }
         input.wf-date::-webkit-calendar-picker-indicator{ margin-left:auto; opacity:.55; cursor:pointer; }
       `}</style>
-      {/* ---------- Breadcrumb ---------- */}
-      {onWorkflowsHome && (
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16, fontSize: 12.5, flexWrap: "wrap" }}>
-          <button style={crumbLink} onClick={onWorkflowsHome}>← Workflows</button>
-          <span style={{ color: MUTED }}>/</span>
-          <span style={{ color: MUTED }}>{info.workflow || "Untitled workflow"}</span>
-        </div>
-      )}
       {/* ---------- Page header ---------- */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 20 }}>
         <div>
@@ -1362,12 +1418,17 @@ export default function WorkflowCapture({
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Btn onClick={() => setInfoModalOpen(true)}>Workflow info</Btn>
           <Menu label="Import / Export ▾" items={[
-            { label: "Import JSON", onClick: () => fileRef.current?.click() },
+            { label: "Export Excel", onClick: exportExcel },
+            { label: "Import Excel", onClick: () => xlsxRef.current?.click() },
+            { divider: true },
             { label: "Export JSON", onClick: exportWorkflow },
+            { label: "Import JSON", onClick: () => fileRef.current?.click() },
             { label: "Grid CSV", onClick: exportCSV },
           ]} />
           <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
             onChange={(e) => { if (e.target.files?.[0]) importWorkflow(e.target.files[0]); e.target.value = ""; }} />
+          <input ref={xlsxRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }}
+            onChange={(e) => { if (e.target.files?.[0]) importExcel(e.target.files[0]); e.target.value = ""; }} />
         </div>
       </div>
 
