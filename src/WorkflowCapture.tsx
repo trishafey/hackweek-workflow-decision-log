@@ -46,10 +46,10 @@ function InfoDot({ text }) {
           cursor: "help", background: "transparent",
         }}
       >
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block" }}>
-          <line x1="12" y1="11" x2="12" y2="16" />
-          <line x1="12" y1="7.5" x2="12" y2="7.5" />
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block" }}>
+          <line x1="12" y1="11" x2="12" y2="16.5" />
+          <line x1="12" y1="7" x2="12" y2="7" />
         </svg>
       </span>
       {show && pos && (
@@ -62,6 +62,23 @@ function InfoDot({ text }) {
         }}>{text}</span>
       )}
     </>
+  );
+}
+
+// Expand / exit full-screen icon (lucide maximize / minimize).
+function Maximize({ size = 16, exit = false }) {
+  return exit ? (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block" }}>
+      <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+      <line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" />
+    </svg>
+  ) : (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block" }}>
+      <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+      <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+    </svg>
   );
 }
 
@@ -764,6 +781,16 @@ export default function WorkflowCapture({
   const [showPreview, setShowPreview] = useState(false);
   const [infoOpen, setInfoOpen] = useState(true);
   const [view, setView] = useState("grid"); // "grid" | "diagram"
+  const [fullscreen, setFullscreen] = useState(false); // expand grid/diagram to fill the screen
+  // On phones we drop the sticky first column so the table can scroll fully.
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 700px)");
+    const on = () => setIsMobile(mq.matches);
+    mq.addEventListener ? mq.addEventListener("change", on) : mq.addListener(on);
+    return () => { mq.removeEventListener ? mq.removeEventListener("change", on) : mq.removeListener(on); };
+  }, []);
   const [infoEditing, setInfoEditing] = useState(startInfoEditing); // Workflow info: view (static) vs edit; new workflows start in edit
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
@@ -1415,20 +1442,28 @@ export default function WorkflowCapture({
       </div>
 
       {/* ---------- Capture grid / Tree diagram ---------- */}
+      <div style={fullscreen ? { position: "fixed", inset: 0, zIndex: 80, background: "#FBFAF8", padding: "14px 16px", overflow: "auto" } : undefined}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
         <h2 style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, margin: 0, color: INK }}>{view === "grid" ? "Capture grid" : "Tree diagram"}</h2>
-        <div style={{ display: "inline-flex", border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
-          {[["grid", "Grid"], ["diagram", "Tree diagram"]].map(([v, lbl]) => (
-            <button key={v} onClick={() => setView(v)} style={{
-              fontFamily: SANS, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none",
-              padding: "6px 12px", background: view === v ? ACCENT : "transparent", color: view === v ? "#FDFCFA" : MUTED,
-            }}>{lbl}</button>
-          ))}
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "inline-flex", border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
+            {[["grid", "Grid"], ["diagram", "Tree diagram"]].map(([v, lbl]) => (
+              <button key={v} onClick={() => setView(v)} style={{
+                fontFamily: SANS, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none",
+                padding: "6px 12px", background: view === v ? ACCENT : "transparent", color: view === v ? "#FDFCFA" : MUTED,
+              }}>{lbl}</button>
+            ))}
+          </div>
+          <button onClick={() => setFullscreen((f) => !f)} title={fullscreen ? "Exit full screen" : "Expand to full screen"}
+            aria-label={fullscreen ? "Exit full screen" : "Expand to full screen"} style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 30,
+              border: `1px solid ${BORDER}`, borderRadius: 8, background: CARD_BG, color: MUTED, cursor: "pointer",
+            }}><Maximize exit={fullscreen} /></button>
         </div>
       </div>
 
       {view === "diagram" ? (
-        <WorkflowDiagram flows={flows} decisions={decisions} onSelectStep={goToStep} />
+        <WorkflowDiagram flows={flows} decisions={decisions} onSelectStep={goToStep} height={fullscreen ? "calc(100vh - 90px)" : undefined} />
       ) : (<>
       {/* Branch lineage breadcrumb (only for sub-flows) */}
       {activeFlowId !== "main" && (() => {
@@ -1511,9 +1546,9 @@ export default function WorkflowCapture({
           <thead>
             <tr>
               <th style={{
-                position: "sticky", left: 0, zIndex: 10, background: "#F5F3EF",
+                position: isMobile ? "static" : "sticky", left: 0, zIndex: 10, background: "#F5F3EF",
                 borderBottom: `2px solid ${ACCENT}`, borderRight: "none",
-                padding: "10px 14px", textAlign: "left", minWidth: 210, width: 210,
+                padding: "10px 14px", textAlign: "left", minWidth: isMobile ? 150 : 210, width: isMobile ? 150 : 210,
                 fontFamily: SANS, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em",
                 textTransform: "uppercase", color: MUTED,
               }}>Field</th>
@@ -1548,11 +1583,11 @@ export default function WorkflowCapture({
               return (
                 <tr key={row.key}>
                   <td style={{
-                    position: "sticky", left: 0, zIndex: 5,
+                    position: isMobile ? "static" : "sticky", left: 0, zIndex: 5,
                     background: isAI ? ACCENT_SOFT : "#FBFAF8",
                     borderBottom: ri < ROWS.length - 1 ? `1px solid ${BORDER}` : "none",
-                    borderRight: "none",
-                    padding: "10px 14px", verticalAlign: "top", width: 210, minWidth: 210,
+                    padding: "10px 14px", verticalAlign: "top",
+                    width: isMobile ? 150 : 210, minWidth: isMobile ? 150 : 210,
                     borderRight: `1px solid ${BORDER}`,
                   }}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -1664,9 +1699,10 @@ export default function WorkflowCapture({
       </div>
 
       <p style={{ fontSize: 11.5, color: MUTED, marginTop: 10 }}>
-        Tip: hover the <span style={{ fontWeight: 600 }}>ⓘ</span> next to a field for what it means. Use a cell's <span style={{ fontWeight: 600 }}>✚</span> to log a decision pinned to that cell, and a <span style={{ fontWeight: 600 }}>Branches</span> cell to create or link a sub-flow.
+        Tip: hover or tap the <span style={{ fontWeight: 600 }}>ⓘ</span> next to a field for what it means. Use a cell's <span style={{ fontWeight: 600 }}>✚</span> to log a decision pinned to that cell, and a <span style={{ fontWeight: 600 }}>Branches</span> cell to create or link a sub-flow.
       </p>
       </>)}
+      </div>
 
       {/* ---------- Decisions section ---------- */}
       <div style={{ marginTop: 30 }}>

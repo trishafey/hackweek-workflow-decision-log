@@ -79,7 +79,7 @@ function blankWorkflow(name, product, owner) {
 // Per-row kebab (⋯) menu with Archive/Unarchive + Delete.
 // The popup is positioned with fixed coordinates so it is never clipped by the
 // table wrapper's overflow:hidden (which previously hid the last row's menu).
-function RowMenu({ archived, onArchive, onDelete, onDuplicate }) {
+function RowMenu({ archived, onArchive, onDelete, onDuplicate, onRename }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
@@ -103,6 +103,7 @@ function RowMenu({ archived, onArchive, onDelete, onDuplicate }) {
         <>
           <div className="home-menu-scrim" onClick={() => setOpen(false)} />
           <div className="home-menu-pop" style={{ position: "fixed", top: pos?.top ?? "auto", bottom: pos?.bottom ?? "auto", right: pos?.right ?? 0 }}>
+            {onRename && <button onClick={() => { setOpen(false); onRename(); }}>Rename</button>}
             {onDuplicate && <button onClick={() => { setOpen(false); onDuplicate(); }}>Duplicate</button>}
             <button onClick={() => { setOpen(false); onArchive(); }}>{archived ? "Unarchive" : "Archive"}</button>
             <button className="danger" onClick={() => { setOpen(false); onDelete(); }}>Delete</button>
@@ -122,7 +123,7 @@ function HomeNav({ active, onLogs, onWorkflows }) {
   );
 }
 
-function LogsHome({ logs, onOpen, onCreate, onWorkflows, onLogs, onArchive, onDelete, onDuplicate }) {
+function LogsHome({ logs, onOpen, onCreate, onWorkflows, onLogs, onArchive, onDelete, onDuplicate, onRename }) {
   const [creating, setCreating] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [q, setQ] = useState("");
@@ -174,6 +175,7 @@ function LogsHome({ logs, onOpen, onCreate, onWorkflows, onLogs, onArchive, onDe
                   <td className="dim">{s.updated}</td>
                   <td className="home-rowactions">
                     <RowMenu archived={l.archived}
+                      onRename={() => { const def = (l.title || "").replace(/\s*\(copy\)\s*$/i, ""); const n = window.prompt("Rename decision log", def); if (n && n.trim()) onRename(l.id, n.trim()); }}
                       onDuplicate={() => onDuplicate(l.id)}
                       onArchive={() => onArchive(l.id, !l.archived)}
                       onDelete={() => { if (window.confirm(`Delete "${l.title}" and all its decisions? This can't be undone.`)) onDelete(l.id); }} />
@@ -249,7 +251,7 @@ function CreateWorkflowModal({ onClose, onCreate }) {
 /*  Workflows home (searchable index)                                 */
 /* ------------------------------------------------------------------ */
 
-function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onWorkflows, onArchive, onDelete, onDuplicate }) {
+function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onWorkflows, onArchive, onDelete, onDuplicate, onRename }) {
   const [creating, setCreating] = useState(false);
   const [q, setQ] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -301,6 +303,7 @@ function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onWorkflows, onArc
                 <td className="dim">{w.updated || "—"}</td>
                 <td className="home-rowactions">
                   <RowMenu archived={w.archived}
+                    onRename={() => { const def = (w.name || "").replace(/\s*\(copy\)\s*$/i, ""); const n = window.prompt("Rename workflow", def); if (n && n.trim()) onRename(w.id, n.trim()); }}
                     onDuplicate={() => onDuplicate(w.id)}
                     onArchive={() => onArchive(w.id, !w.archived)}
                     onDelete={() => { if (window.confirm(`Delete the workflow "${w.name}"? This can't be undone.`)) onDelete(w.id); }} />
@@ -394,6 +397,13 @@ export default function App() {
   const updateLog = (id, updater) => setLogs((ls) => ls.map((l) => (l.id === id ? updater(l) : l)));
   const setLogArchived = (id, archived) => updateLog(id, (p) => ({ ...p, archived }));
   const deleteLog = (id) => setLogs((ls) => ls.filter((l) => l.id !== id));
+  const renameLog = (id, title) => updateLog(id, (p) => ({ ...p, title }));
+  // Rename a workflow and keep its info "Workflow" field in sync.
+  const renameWorkflow = (id, name) => setWorkflows((ws) => ws.map((w) => {
+    if (w.id !== id) return w;
+    const content = w.content ? { ...w.content, info: { ...(w.content.info || {}), workflow: name } } : w.content;
+    return content ? { ...w, name, content } : { ...w, name };
+  }));
   const setWorkflowArchived = (id, archived) => setWorkflows((ws) => ws.map((w) => (w.id === id ? { ...w, archived } : w)));
   const deleteWorkflow = (id) => setWorkflows((ws) => ws.filter((w) => w.id !== id));
 
@@ -427,7 +437,15 @@ export default function App() {
     setWorkflows((ws) => ws.map((w) => {
       if (w.id !== id) return w;
       const mainFlow = (content.flows || []).find((f) => f.id === "main") || (content.flows || [])[0];
-      return { ...w, content, steps: mainFlow ? mainFlow.columns.length : w.steps, updated: TODAY };
+      const info = content.info || {};
+      // Keep the table's name/product in sync with the workflow info fields.
+      return {
+        ...w, content,
+        name: (info.workflow || "").trim() || w.name,
+        product: (info.product || "").trim() || w.product,
+        steps: mainFlow ? mainFlow.columns.length : w.steps,
+        updated: TODAY,
+      };
     }));
 
   // Creates a log and returns its id without navigating (used by the
@@ -527,12 +545,12 @@ export default function App() {
   }
 
   if (route.view === "workflows") {
-    return <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={() => setRoute({ view: "logs" })} onWorkflows={() => setRoute({ view: "workflows" })} onArchive={setWorkflowArchived} onDelete={deleteWorkflow} onDuplicate={duplicateWorkflow} />;
+    return <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={() => setRoute({ view: "logs" })} onWorkflows={() => setRoute({ view: "workflows" })} onArchive={setWorkflowArchived} onDelete={deleteWorkflow} onDuplicate={duplicateWorkflow} onRename={renameWorkflow} />;
   }
 
   if (route.view === "log") {
     const log = logs.find((l) => l.id === route.id);
-    if (!log) return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} />;
+    if (!log) return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} onRename={renameLog} />;
     return (
       <DecisionLog
         key={log.id}
@@ -545,7 +563,7 @@ export default function App() {
     );
   }
 
-  return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} />;
+  return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} onRename={renameLog} />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -582,9 +600,9 @@ const HOME_CSS = `
   border:1px solid var(--line);border-radius:9px;padding:9px 12px}
 .home-search:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .home-count{font-size:12px;color:var(--ink-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
-.home-table-wrap{margin-top:16px;border:1px solid var(--line);border-radius:12px;overflow:hidden;
-  background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.02);max-width:1000px}
-.home-tbl{border-collapse:collapse;width:100%;font-size:14px}
+.home-table-wrap{margin-top:16px;border:1px solid var(--line);border-radius:12px;overflow-x:auto;overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.02);max-width:1000px}
+.home-tbl{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
 .home-tbl thead th{text-align:left;background:#FCFBF8;font-weight:600;font-size:10.5px;
   letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);
   padding:12px 18px;border-bottom:1px solid var(--line)}

@@ -17,7 +17,7 @@ const clip = (s, n = 90) => { const t = (s || "").replace(/\s+/g, " ").trim(); r
 // Build an interactive tree of the whole workflow: each flow's steps as nodes,
 // sequential edges within a flow, and "branch" edges into linked sub-flows.
 // Nodes are annotated with edge cases (exceptions/pain) and decision counts.
-export default function WorkflowDiagram({ flows, decisions, onSelectStep }) {
+export default function WorkflowDiagram({ flows, decisions, onSelectStep, height = "72vh" }) {
   const { nodes, edges } = useMemo(() => {
     const nodes = [];
     const edges = [];
@@ -158,7 +158,7 @@ export default function WorkflowDiagram({ flows, decisions, onSelectStep }) {
   }, [flows, decisions]);
 
   return (
-    <div style={{ height: "72vh", border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", background: "#FBFAF8" }}>
+    <div style={{ height, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", background: "#FBFAF8" }}>
       <ReactFlow nodes={nodes} edges={edges} fitView minZoom={0.2} proOptions={{ hideAttribution: true }}
         onNodeClick={(_e, node) => {
           if (!onSelectStep) return;
