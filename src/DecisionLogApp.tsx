@@ -294,7 +294,7 @@ function csvCell(v) {
 }
 
 // Minimal RFC-4180-ish CSV parser (handles quotes, escaped quotes, newlines).
-function parseCSV(text) {
+export function parseCSV(text) {
   const rows = []; let row = [], field = "", inQ = false;
   for (let i = 0; i < text.length; i++) {
     const c = text[i];

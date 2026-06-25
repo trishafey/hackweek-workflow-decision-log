@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import CreateLogModal from "./CreateLogModal";
-import { FILLABLE_LOG, suggestLogField, STATUS_HELP } from "./DecisionLogApp";
+import { FILLABLE_LOG, suggestLogField, STATUS_HELP, parseCSV } from "./DecisionLogApp";
 import WorkflowDiagram from "./WorkflowDiagram";
 import * as XLSX from "xlsx";
 
@@ -879,6 +879,7 @@ export default function WorkflowCapture({
   const [users, setUsers] = useState(() => (init.users || [])); // [{id,type,group,role,description}]
   const fileRef = useRef(null);
   const xlsxRef = useRef(null);
+  const csvRef = useRef(null);
 
   // Report content up (debounced) so the App can persist it to the database.
   useEffect(() => {
@@ -1304,6 +1305,54 @@ export default function WorkflowCapture({
     flash("Grid CSV exported (info + flows)");
   };
 
+  // Import a workflow from CSV — round-trips the export format (Workflow info +
+  // one "Capture grid — <flow>" section per flow), and also accepts a bare grid
+  // (just a "Field, …" header). Branch links between flows aren't encoded in CSV.
+  const importWorkflowCSV = (file) => {
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const rows = parseCSV(String(r.result)).filter((row) => row.some((c) => (c || "").trim() !== ""));
+        const labelToKey = Object.fromEntries(INFO_FIELDS.map((f) => [f.label.toLowerCase(), f.key]));
+        const rowLabelToKey = Object.fromEntries(ROWS.map((rw) => [rw.label.toLowerCase(), rw.key]));
+        const newInfo = { ...info }; const flowsAcc = []; let cur = null; let pendingName = null;
+        rows.forEach((row) => {
+          const first = (row[0] || "").trim();
+          if (first.toLowerCase() === "workflow info") return;
+          if (/^capture grid/i.test(first)) { pendingName = first.replace(/^capture grid\s*[—–-]\s*/i, "").trim() || null; return; }
+          if (first.toLowerCase() === "field") {
+            if (cur) flowsAcc.push(cur);
+            const name = pendingName || (flowsAcc.length === 0 ? "Main flow" : "Sub-flow " + flowsAcc.length);
+            cur = { name, columns: row.slice(1).map((nm, i) => ({ id: "c" + i, name: String(nm || ("Step " + (i + 1))) })), cells: {} };
+            pendingName = null;
+            return;
+          }
+          if (cur) {
+            const rk = rowLabelToKey[first.toLowerCase()];
+            if (rk) cur.columns.forEach((c, i) => { const v = row[i + 1]; if (v != null && String(v) !== "") cur.cells[c.id] = { ...(cur.cells[c.id] || {}), [rk]: String(v) }; });
+          } else {
+            const k = labelToKey[first.toLowerCase()];
+            if (k) newInfo[k] = row[1] != null ? String(row[1]) : "";
+          }
+        });
+        if (cur) flowsAcc.push(cur);
+        if (!flowsAcc.length) throw new Error("no grid");
+        const newFlows = flowsAcc.map((f, i) => ({
+          id: i === 0 ? "main" : "flow-imp-" + i,
+          name: i === 0 ? (f.name || "Main flow") : f.name,
+          columns: f.columns, cells: f.cells, subflows: {}, nextId: f.columns.length,
+        }));
+        setInfo(newInfo);
+        setFlows(newFlows);
+        setActiveFlowId("main");
+        flash(`Workflow imported from CSV (${newFlows.length} flow${newFlows.length === 1 ? "" : "s"})`);
+      } catch {
+        flash("Couldn't read that CSV — expected a workflow grid export.");
+      }
+    };
+    r.readAsText(file);
+  };
+
   // ----- Excel (.xlsx) export / import -----
   const exportExcel = () => {
     const wb = XLSX.utils.book_new();
@@ -1442,14 +1491,18 @@ export default function WorkflowCapture({
             { label: "Export Excel", onClick: exportExcel },
             { label: "Import Excel", onClick: () => xlsxRef.current?.click() },
             { divider: true },
+            { label: "Export CSV (grid)", onClick: exportCSV },
+            { label: "Import CSV", onClick: () => csvRef.current?.click() },
+            { divider: true },
             { label: "Export JSON", onClick: exportWorkflow },
             { label: "Import JSON", onClick: () => fileRef.current?.click() },
-            { label: "Grid CSV", onClick: exportCSV },
           ]} />
           <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
             onChange={(e) => { if (e.target.files?.[0]) importWorkflow(e.target.files[0]); e.target.value = ""; }} />
           <input ref={xlsxRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }}
             onChange={(e) => { if (e.target.files?.[0]) importExcel(e.target.files[0]); e.target.value = ""; }} />
+          <input ref={csvRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
+            onChange={(e) => { if (e.target.files?.[0]) importWorkflowCSV(e.target.files[0]); e.target.value = ""; }} />
         </div>
       </div>
 
