@@ -1385,7 +1385,7 @@ const CSS = `
   --danger:#A8453B;
   font-family: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color:var(--ink); background:var(--paper); min-height:100vh;
-  padding:28px clamp(16px,4vw,44px) 80px; box-sizing:border-box;
+  padding:32px clamp(16px,5vw,64px) 80px; box-sizing:border-box;
   -webkit-font-smoothing:antialiased;
 }
 .dl-root *{box-sizing:border-box}

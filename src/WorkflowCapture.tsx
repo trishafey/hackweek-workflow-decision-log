@@ -1400,7 +1400,7 @@ export default function WorkflowCapture({
   const staticVal = { fontFamily: SANS, fontSize: 13, color: INK, padding: "7px 0", minHeight: 20, lineHeight: 1.4, wordBreak: "break-word" };
 
   return (
-    <div style={{ minHeight: "100vh", background: BASE_BG, color: INK, padding: "28px 28px 60px", fontFamily: SANS }}>
+    <div style={{ minHeight: "100vh", background: BASE_BG, color: INK, padding: "32px clamp(16px,5vw,64px) 80px", fontFamily: SANS }}>
       <style>{`
         input.wf-date{ -webkit-appearance:none; -moz-appearance:none; appearance:none; width:100%; min-width:0; box-sizing:border-box; }
         input.wf-date::-webkit-date-and-time-value{ text-align:left; margin:0; }
