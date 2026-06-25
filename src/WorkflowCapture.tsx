@@ -861,6 +861,7 @@ export default function WorkflowCapture({
   const [toast, setToast] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const [decDrawerId, setDecDrawerId] = useState(null); // decision open in the editing drawer
+  const [wfStatusBanner, setWfStatusBanner] = useState(null); // { from, to, subject, workflowStep, anchor } after a status change
   const [focusCol, setFocusCol] = useState(null);
   const [decQuery, setDecQuery] = useState("");
   const [decStatus, setDecStatus] = useState("All");
@@ -1406,6 +1407,29 @@ export default function WorkflowCapture({
         input.wf-date::-webkit-date-and-time-value{ text-align:left; margin:0; }
         input.wf-date::-webkit-calendar-picker-indicator{ margin-left:auto; opacity:.55; cursor:pointer; }
       `}</style>
+      {/* Status-change banner: offer to log it as a decision */}
+      {wfStatusBanner && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 130, display: "flex", alignItems: "center",
+          justifyContent: "center", gap: 14, flexWrap: "wrap", background: ACCENT, color: "#fff",
+          padding: "11px 18px", boxShadow: "0 6px 20px -8px rgba(0,0,0,0.4)", fontFamily: SANS,
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>
+            Status update made ({wfStatusBanner.from} → {wfStatusBanner.to}) — would you like to add this as a decision?
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => {
+              newDecision({
+                subject: wfStatusBanner.subject, workflowStep: wfStatusBanner.workflowStep,
+                status: wfStatusBanner.to, anchor: wfStatusBanner.anchor,
+                decision: `Status changed from ${wfStatusBanner.from} to ${wfStatusBanner.to}.`,
+              }, { drawer: true });
+              setWfStatusBanner(null);
+            }} style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 600, border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", background: "#fff", color: ACCENT }}>Yes</button>
+            <button onClick={() => setWfStatusBanner(null)} style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 600, border: "1px solid rgba(255,255,255,0.5)", borderRadius: 8, padding: "6px 14px", cursor: "pointer", background: "transparent", color: "#fff" }}>Skip</button>
+          </div>
+        </div>
+      )}
       {/* ---------- Page header ---------- */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 20 }}>
         <div>
@@ -2127,7 +2151,13 @@ export default function WorkflowCapture({
               <div style={{ flex: 1, overflowY: "auto", padding: "18px 20px" }}>
                 <DecisionCard d={dec} mode="form"
                   statusStyle={STATUS_STYLE[dec.status] || STATUS_STYLE["Proposed"]}
-                  onChange={(nd) => setDecisions((p) => p.map((x) => (x.id === dec.id ? nd : x)))}
+                  onChange={(nd) => {
+                    // Offer to log a status change as its own decision (established decisions only).
+                    if ((dec.status || "Proposed") !== (nd.status || "Proposed") && (dec.decision || "").trim()) {
+                      setWfStatusBanner({ from: dec.status || "Proposed", to: nd.status || "Proposed", subject: nd.subject || "", workflowStep: nd.workflowStep || "", anchor: nd.anchor || null });
+                    }
+                    setDecisions((p) => p.map((x) => (x.id === dec.id ? nd : x)));
+                  }}
                   onDelete={() => { setDecisions((p) => p.filter((x) => x.id !== dec.id)); close(); }}
                 />
               </div>

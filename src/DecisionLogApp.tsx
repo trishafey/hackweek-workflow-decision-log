@@ -14,7 +14,7 @@ const STATUSES = [
   "Future state", "Rejected", "Descoped", "Deprecated",
 ];
 
-export const STATUS_HELP = "Decision statuses:\nProposed — raised, not yet reviewed\nUnder review — being evaluated\nPrioritized — accepted, queued for work\nActive — in progress / in effect\nFuture state — planned for later\nRejected — decided against\nDescoped — removed from current scope\nDeprecated — no longer in use";
+export const STATUS_HELP = "Statuses:\nProposed — default state; needs to be discussed with the appropriate teams\nUnder review — discussion is happening to determine feasibility; other teams may be needed\nPrioritized — will be worked on\nActive — launched\nFuture state — to be worked on in an upcoming iteration\nRejected — denied\nDescoped — removed from original scope; was worked on but abandoned mid-work\nDeprecated — was launched but now removed / sunsetted";
 
 const STATUS_STYLE = {
   "Proposed":     { bg: "#EEF1F4", fg: "#475569", dot: "#94A3B8" },
@@ -1364,12 +1364,12 @@ export default function DecisionLog({
               </div>
               <div className="settings-grid">
                 <label className="field">
-                  <span className="field-label">Project prefix</span>
+                  <FieldLabel label="Project prefix" desc="First 3 letters of the project. e.g. NOV (Nova AI)." />
                   <input className="input mono-in" value={settings.prefix}
                     onChange={(e) => setSettings((s) => ({ ...s, prefix: e.target.value.replace(/\s/g, "") }))} />
                 </label>
                 <label className="field">
-                  <span className="field-label">Workflow code</span>
+                  <FieldLabel label="Workflow code" desc="3–5 letters for the specific workflow. e.g. TAX." />
                   <input className="input mono-in" value={settings.workflow}
                     onChange={(e) => setSettings((s) => ({ ...s, workflow: e.target.value.replace(/\s/g, "") }))} />
                 </label>
