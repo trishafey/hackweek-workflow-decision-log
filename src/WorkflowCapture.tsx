@@ -845,6 +845,7 @@ export default function WorkflowCapture({
     (init.decisions || []).reduce((m, x) => Math.max(m, (parseInt(String(x.id).replace(/\D/g, ""), 10) || 0) + 1), 1));
   const [showPreview, setShowPreview] = useState(false);
   const [infoModalOpen, setInfoModalOpen] = useState(startInfoEditing);
+  const [usersModalOpen, setUsersModalOpen] = useState(false);
   const [view, setView] = useState("grid"); // "grid" | "diagram"
   const [fullscreen, setFullscreen] = useState(false); // expand grid/diagram to fill the screen
   // On phones we drop the sticky first column so the table can scroll fully.
@@ -1670,7 +1671,7 @@ export default function WorkflowCapture({
         const mergedLinks = [...links, ...linkedLogLinks]
           .filter((pl) => pl && (pl.url || pl.label))
           .filter((pl) => { const k = (pl.url || "") + "|" + (pl.label || ""); if (seen.has(k)) return false; seen.add(k); return true; });
-        if (!(mergedLinks.length || linkedLog || relatedList.length)) return null;
+        if (!(mergedLinks.length || linkedLog || relatedList.length || users.length)) return null;
         return (
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 18 }}>
           {linkedLog && (
@@ -1701,6 +1702,16 @@ export default function WorkflowCapture({
               <option value="">⇄ Related workflows ({relatedList.length})</option>
               {relatedList.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
+          )}
+          {users.length > 0 && (
+            <button type="button" onClick={() => setUsersModalOpen(true)} title="View users & roles" style={{
+              display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600,
+              color: ACCENT, background: CARD_BG, padding: "4px 11px", borderRadius: 999,
+              border: `1px solid ${ACCENT}`, cursor: "pointer", fontFamily: SANS,
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+              {users.length} user{users.length === 1 ? "" : "s"}
+            </button>
           )}
         </div>
         );
@@ -2063,6 +2074,39 @@ export default function WorkflowCapture({
           </>
         )}
       </div>
+
+      {/* ---------- Users info modal ---------- */}
+      {usersModalOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(43,42,39,0.45)", zIndex: 100, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 24, overflowY: "auto" }}
+          onClick={() => setUsersModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "20px 22px", width: "100%", maxWidth: 560, margin: "24px 0", boxShadow: "0 16px 50px rgba(0,0,0,0.28)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <h2 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 600, margin: 0, color: ACCENT, letterSpacing: "-0.01em" }}>Users & roles</h2>
+              <span style={{ flex: 1 }} />
+              <button onClick={() => setUsersModalOpen(false)} title="Close" style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {users.map((u) => {
+                const meta = userGroupMeta(u.type);
+                return (
+                  <div key={u.id} style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px", background: "#fff" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: u.description ? 6 : 0 }}>
+                      <Pill tone="accent">{u.role || "Role"}</Pill>
+                      <span style={{ fontSize: 12, color: MUTED, fontFamily: SANS }}>
+                        {(u.type ? u.type.charAt(0).toUpperCase() + u.type.slice(1) : "")}{u.group ? ` · ${u.group}` : ""}
+                      </span>
+                    </div>
+                    {u.description && <div style={{ fontSize: 12.5, color: INK, fontFamily: SANS, lineHeight: 1.5 }}>{u.description}</div>}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+              <Btn small onClick={() => { setUsersModalOpen(false); setInfoModalOpen(true); }}>Edit in Workflow info</Btn>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ---------- Decision editing drawer ---------- */}
       {(() => {

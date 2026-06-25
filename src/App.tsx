@@ -466,13 +466,14 @@ export default function App() {
   // workflow page's "Add to Decision Log" flow).
   const createLogSilent = ({ owner, product, feature, workflowLink, projectLinks, prefix, workflow }) => {
     const id = "log-" + Date.now();
-    setLogs((ls) => [...ls, {
-      id, title: feature, owner, product, feature,
+    // New logs go to the top of the directory (newest first).
+    setLogs((ls) => [{
+      id, title: feature, owner, product, feature, createdAt: Date.now(),
       workflowLink: workflowLink || "", workflowView: null,
       settings: { prefix: prefix || code(product), workflow: workflow || code(feature) },
       projectLinks: projectLinks || [],
       entries: [],
-    }]);
+    }, ...ls]);
     return id;
   };
 
@@ -523,12 +524,15 @@ export default function App() {
     }));
   };
 
-  const createWorkflow = ({ name, product, owner, projectLinks }) => {
+  const createWorkflow = ({ name, product, owner, projectLinks, content }) => {
     const id = "wf-" + Date.now();
-    setWorkflows((ws) => [...ws, {
+    const mainFlow = content && (content.flows || []).find((f) => f.id === "main");
+    // New workflows go to the top of the directory (newest first).
+    setWorkflows((ws) => [{
       id, name: name || "Untitled workflow", product: product || "", owner: owner || "",
-      steps: 0, updated: TODAY, projectLinks: projectLinks || [],
-    }]);
+      steps: mainFlow ? mainFlow.columns.length : 0, updated: TODAY, createdAt: Date.now(),
+      projectLinks: projectLinks || [], ...(content ? { content } : {}),
+    }, ...ws]);
     setRoute({ view: "workflow", id });
   };
 
