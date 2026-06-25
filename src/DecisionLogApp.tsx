@@ -1013,25 +1013,6 @@ export default function DecisionLog({
           <button className="btn ghost" onClick={() => setSettingsOpen(true)}>
             <Settings size={15} /> Settings
           </button>
-          <div className="menu-wrap">
-            <button className="btn ghost" onClick={() => setExportOpen((o) => !o)}>
-              <Download size={15} /> Export <Caret size={13} />
-            </button>
-            {exportOpen && (
-              <>
-                <div className="menu-scrim" onClick={() => setExportOpen(false)} />
-                <div className="menu">
-                  <button onClick={exportJSON}><FileJson size={15} /> Download JSON</button>
-                  <button onClick={exportCSV}><FileSpreadsheet size={15} /> Download CSV <span className="hint">FigJam</span></button>
-                  <button onClick={copyTable}><ClipboardCopy size={15} /> Copy table (TSV)</button>
-                </div>
-              </>
-            )}
-          </div>
-          <button className="btn ghost" onClick={() => fileInput.current && fileInput.current.click()}>
-            <Upload size={15} /> Import CSV
-          </button>
-          <input ref={fileInput} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={importCSV} />
         </div>
       </header>
 
@@ -1040,6 +1021,24 @@ export default function DecisionLog({
         <button className="btn solid" onClick={openAdd}>
           <Plus size={15} /> Add decision
         </button>
+        <div className="menu-wrap">
+          <button className="btn ghost" onClick={() => setExportOpen((o) => !o)}>
+            <Download size={15} /> Import / Export <Caret size={13} />
+          </button>
+          {exportOpen && (
+            <>
+              <div className="menu-scrim" onClick={() => setExportOpen(false)} />
+              <div className="menu">
+                <button onClick={() => { setExportOpen(false); fileInput.current && fileInput.current.click(); }}><Upload size={15} /> Import CSV</button>
+                <div style={{ height: 1, background: "var(--line)", margin: "4px 0" }} />
+                <button onClick={exportJSON}><FileJson size={15} /> Export JSON</button>
+                <button onClick={exportCSV}><FileSpreadsheet size={15} /> Export CSV <span className="hint">FigJam</span></button>
+                <button onClick={copyTable}><ClipboardCopy size={15} /> Copy table (TSV)</button>
+              </div>
+            </>
+          )}
+        </div>
+        <input ref={fileInput} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={importCSV} />
         <button className="btn secondary" onClick={() => setAiOpen(true)}>
           <Sparkles size={16} /> Populate from notes
         </button>
