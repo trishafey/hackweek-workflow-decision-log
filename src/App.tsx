@@ -79,7 +79,7 @@ function blankWorkflow(name, product, owner) {
 // Per-row kebab (⋯) menu with Archive/Unarchive + Delete.
 // The popup is positioned with fixed coordinates so it is never clipped by the
 // table wrapper's overflow:hidden (which previously hid the last row's menu).
-function RowMenu({ archived, onArchive, onDelete }) {
+function RowMenu({ archived, onArchive, onDelete, onDuplicate }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
@@ -103,6 +103,7 @@ function RowMenu({ archived, onArchive, onDelete }) {
         <>
           <div className="home-menu-scrim" onClick={() => setOpen(false)} />
           <div className="home-menu-pop" style={{ position: "fixed", top: pos?.top ?? "auto", bottom: pos?.bottom ?? "auto", right: pos?.right ?? 0 }}>
+            {onDuplicate && <button onClick={() => { setOpen(false); onDuplicate(); }}>Duplicate</button>}
             <button onClick={() => { setOpen(false); onArchive(); }}>{archived ? "Unarchive" : "Archive"}</button>
             <button className="danger" onClick={() => { setOpen(false); onDelete(); }}>Delete</button>
           </div>
@@ -121,7 +122,7 @@ function HomeNav({ active, onLogs, onWorkflows }) {
   );
 }
 
-function LogsHome({ logs, onOpen, onCreate, onWorkflows, onLogs, onArchive, onDelete }) {
+function LogsHome({ logs, onOpen, onCreate, onWorkflows, onLogs, onArchive, onDelete, onDuplicate }) {
   const [creating, setCreating] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [q, setQ] = useState("");
@@ -173,6 +174,7 @@ function LogsHome({ logs, onOpen, onCreate, onWorkflows, onLogs, onArchive, onDe
                   <td className="dim">{s.updated}</td>
                   <td className="home-rowactions">
                     <RowMenu archived={l.archived}
+                      onDuplicate={() => onDuplicate(l.id)}
                       onArchive={() => onArchive(l.id, !l.archived)}
                       onDelete={() => { if (window.confirm(`Delete "${l.title}" and all its decisions? This can't be undone.`)) onDelete(l.id); }} />
                   </td>
@@ -247,7 +249,7 @@ function CreateWorkflowModal({ onClose, onCreate }) {
 /*  Workflows home (searchable index)                                 */
 /* ------------------------------------------------------------------ */
 
-function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onWorkflows, onArchive, onDelete }) {
+function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onWorkflows, onArchive, onDelete, onDuplicate }) {
   const [creating, setCreating] = useState(false);
   const [q, setQ] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -299,6 +301,7 @@ function WorkflowsHome({ workflows, onOpen, onCreate, onLogs, onWorkflows, onArc
                 <td className="dim">{w.updated || "—"}</td>
                 <td className="home-rowactions">
                   <RowMenu archived={w.archived}
+                    onDuplicate={() => onDuplicate(w.id)}
                     onArchive={() => onArchive(w.id, !w.archived)}
                     onDelete={() => { if (window.confirm(`Delete the workflow "${w.name}"? This can't be undone.`)) onDelete(w.id); }} />
                 </td>
@@ -393,6 +396,31 @@ export default function App() {
   const deleteLog = (id) => setLogs((ls) => ls.filter((l) => l.id !== id));
   const setWorkflowArchived = (id, archived) => setWorkflows((ws) => ws.map((w) => (w.id === id ? { ...w, archived } : w)));
   const deleteWorkflow = (id) => setWorkflows((ws) => ws.filter((w) => w.id !== id));
+
+  // Duplicate a log / workflow as an independent copy placed right after it.
+  const duplicateLog = (id) => setLogs((ls) => {
+    const i = ls.findIndex((l) => l.id === id);
+    if (i < 0) return ls;
+    const copy = JSON.parse(JSON.stringify(ls[i]));
+    copy.id = "log-" + Date.now();
+    copy.title = (ls[i].title || "Untitled") + " (copy)";
+    copy.archived = false;
+    const next = [...ls];
+    next.splice(i + 1, 0, copy);
+    return next;
+  });
+  const duplicateWorkflow = (id) => setWorkflows((ws) => {
+    const i = ws.findIndex((w) => w.id === id);
+    if (i < 0) return ws;
+    const copy = JSON.parse(JSON.stringify(ws[i]));
+    copy.id = "wf-" + Date.now();
+    copy.name = (ws[i].name || "Untitled workflow") + " (copy)";
+    copy.updated = TODAY;
+    copy.archived = false;
+    const next = [...ws];
+    next.splice(i + 1, 0, copy);
+    return next;
+  });
   // Persist a workflow's capture content (info + flows + decisions + links) and
   // refresh its step count / updated date for the index.
   const updateWorkflowContent = (id, content) =>
@@ -499,12 +527,12 @@ export default function App() {
   }
 
   if (route.view === "workflows") {
-    return <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={() => setRoute({ view: "logs" })} onWorkflows={() => setRoute({ view: "workflows" })} onArchive={setWorkflowArchived} onDelete={deleteWorkflow} />;
+    return <WorkflowsHome workflows={workflows} onOpen={(id) => setRoute({ view: "workflow", id })} onCreate={createWorkflow} onLogs={() => setRoute({ view: "logs" })} onWorkflows={() => setRoute({ view: "workflows" })} onArchive={setWorkflowArchived} onDelete={deleteWorkflow} onDuplicate={duplicateWorkflow} />;
   }
 
   if (route.view === "log") {
     const log = logs.find((l) => l.id === route.id);
-    if (!log) return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} />;
+    if (!log) return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} />;
     return (
       <DecisionLog
         key={log.id}
@@ -517,7 +545,7 @@ export default function App() {
     );
   }
 
-  return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} />;
+  return <LogsHome logs={logs} onOpen={(id) => setRoute({ view: "log", id })} onCreate={createLog} onWorkflows={() => setRoute({ view: "workflows" })} onLogs={() => setRoute({ view: "logs" })} onArchive={setLogArchived} onDelete={deleteLog} onDuplicate={duplicateLog} />;
 }
 
 /* ------------------------------------------------------------------ */

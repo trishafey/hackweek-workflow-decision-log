@@ -15,6 +15,56 @@ function Chevron({ size = 16, rotate = 0 }) {
   );
 }
 
+// Info icon with a tooltip that shows on hover AND tap/click. The bubble is
+// positioned with fixed coordinates so it is never clipped by the scrolling
+// grid container.
+function InfoDot({ text }) {
+  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState(null);
+  const ref = useRef(null);
+  if (!text) return null;
+  const place = () => {
+    const r = ref.current && ref.current.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 6, left: Math.min(r.left + r.width / 2, window.innerWidth - 12) });
+  };
+  return (
+    <>
+      <span
+        ref={ref}
+        role="button"
+        tabIndex={0}
+        aria-label={text}
+        onMouseEnter={() => { place(); setShow(true); }}
+        onMouseLeave={() => setShow(false)}
+        onFocus={() => { place(); setShow(true); }}
+        onBlur={() => setShow(false)}
+        onClick={(e) => { e.stopPropagation(); place(); setShow((s) => !s); }}
+        style={{
+          flex: "0 0 auto", width: 15, height: 15, borderRadius: "50%",
+          border: "1px solid #C9C3B8", color: "#8A857C",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          cursor: "help", background: "transparent",
+        }}
+      >
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block" }}>
+          <line x1="12" y1="11" x2="12" y2="16" />
+          <line x1="12" y1="7.5" x2="12" y2="7.5" />
+        </svg>
+      </span>
+      {show && pos && (
+        <span style={{
+          position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)",
+          zIndex: 200, maxWidth: 240, background: "#2B2A27", color: "#FBFAF8",
+          fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
+          fontSize: 11.5, lineHeight: 1.4, fontWeight: 500, padding: "7px 10px", borderRadius: 8,
+          boxShadow: "0 8px 22px -8px rgba(0,0,0,0.4)", pointerEvents: "none",
+        }}>{text}</span>
+      )}
+    </>
+  );
+}
+
 // ---------- Theme ----------
 const ACCENT = "#1F3A34";
 const ACCENT_SOFT = "#E8EEEC";
@@ -598,7 +648,7 @@ const subIdList = (subflowsObj, colId) => {
 
 export default function WorkflowCapture({
   initial, focusStep, focusFlowId, onWorkflowsHome, projectLinks = [],
-  logsIndex = [], existingLogCodes = [], onCreateLog, onAddToLog, onUpdateLogEntries, onReplaceLogEntries, logEntriesById = {}, onContentChange, startInfoEditing = false,
+  logsIndex = [], existingLogCodes = [], onCreateLog, onAddToLog, onUpdateLogEntries, onReplaceLogEntries, onOpenLog, logEntriesById = {}, onContentChange, startInfoEditing = false,
 }) {
   const init = initial || { info: seedInfo, columns: seedColumns, cells: seedCells, subflows: seedSubflows, decisions: seedDecisions };
   const [info, setInfo] = useState(init.info);
@@ -736,6 +786,17 @@ export default function WorkflowCapture({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [info, flows, decisions, links]);
+
+  // ----- Decision log linking (workflow info) -----
+  const [logMenuOpen, setLogMenuOpen] = useState(false);
+  const [creatingLogLink, setCreatingLogLink] = useState(false);
+  const linkedLogId = (() => { const m = /#\/log\/([^?\s]+)/.exec(info.logLink || ""); return m ? decodeURIComponent(m[1]) : null; })();
+  const linkedLog = linkedLogId ? logsIndex.find((l) => l.id === linkedLogId) : null;
+  const linkDecisionLog = (id) => { setInfo((p) => ({ ...p, logLink: `#/log/${encodeURIComponent(id)}` })); setLogMenuOpen(false); flash("Decision log linked"); };
+  const openLinkedLog = () => {
+    if (linkedLogId && onOpenLog) { onOpenLog(linkedLogId); return; }
+    if (info.logLink) window.open(info.logLink, "_blank", "noopener,noreferrer");
+  };
 
   useEffect(() => {
     const l = document.createElement("link");
@@ -1224,10 +1285,64 @@ export default function WorkflowCapture({
               <div key={f.key}>
                 <label style={labelStyle}>{f.label}</label>
                 {f.key === "logLink" ? (
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input type={f.type || "text"} value={info[f.key] || ""} style={{ ...inputStyle, flex: 1 }}
-                      onChange={(e) => setInfo((p) => ({ ...p, [f.key]: e.target.value }))} />
-                    <Btn small onClick={() => setLinkDraft({ label: "", url: "" })}>+ add links</Btn>
+                  <div>
+                    {linkedLog ? (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                        <button type="button" onClick={openLinkedLog} title="Open decision log" style={{
+                          display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600,
+                          color: ACCENT, background: ACCENT_SOFT, padding: "5px 10px", borderRadius: 999,
+                          border: `1px solid ${ACCENT}`, cursor: "pointer", fontFamily: SANS,
+                        }}><LinkGlyph />{linkedLog.title}</button>
+                        <button type="button" onClick={() => setInfo((p) => ({ ...p, logLink: "" }))} title="Unlink" style={{
+                          border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 11.5, fontFamily: SANS,
+                          textDecoration: "underline", textUnderlineOffset: 2,
+                        }}>unlink</button>
+                      </div>
+                    ) : info.logLink ? (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input type="text" value={info.logLink} style={{ ...inputStyle, flex: 1 }}
+                          onChange={(e) => setInfo((p) => ({ ...p, logLink: e.target.value }))} />
+                      </div>
+                    ) : (
+                      <div style={{ position: "relative", display: "inline-block" }}>
+                        <Btn small onClick={() => setLogMenuOpen((o) => !o)}>+ Add decision log</Btn>
+                        {logMenuOpen && (
+                          <>
+                            <div style={{ position: "fixed", inset: 0, zIndex: 60 }} onClick={() => setLogMenuOpen(false)} />
+                            <div style={{
+                              position: "absolute", left: 0, top: "calc(100% + 4px)", zIndex: 61, minWidth: 220,
+                              background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 4,
+                              boxShadow: "0 10px 26px -10px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column",
+                            }}>
+                              {logsIndex.length > 0 && (
+                                <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: MUTED, padding: "6px 8px 2px" }}>Link existing</div>
+                              )}
+                              {logsIndex.map((l) => (
+                                <button key={l.id} onClick={() => linkDecisionLog(l.id)} style={{
+                                  display: "flex", alignItems: "center", gap: 8, border: "none", background: "transparent",
+                                  borderRadius: 6, padding: "8px 9px", cursor: "pointer", textAlign: "left", fontFamily: SANS,
+                                }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = ACCENT_SOFT; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                                  <span style={{ fontSize: 12.5, fontWeight: 600, color: INK }}>{l.title}</span>
+                                  <span style={{ marginLeft: "auto", fontFamily: "ui-monospace, monospace", fontSize: 10.5, color: MUTED }}>{l.code}</span>
+                                </button>
+                              ))}
+                              {logsIndex.length > 0 && <div style={{ height: 1, background: BORDER, margin: "4px 0" }} />}
+                              <button onClick={() => { setLogMenuOpen(false); setCreatingLogLink(true); }} style={{
+                                border: "none", background: "transparent", borderRadius: 6, padding: "8px 9px", cursor: "pointer",
+                                textAlign: "left", fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: ACCENT,
+                              }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = ACCENT_SOFT; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>+ Create new decision log</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ marginTop: 8 }}>
+                      <Btn small onClick={() => setLinkDraft({ label: "", url: "" })}>+ add links</Btn>
+                    </div>
                   </div>
                 ) : f.type === "date" ? (
                   <input className="wf-date" type="date" value={info[f.key] || ""} style={inputStyle}
@@ -1273,9 +1388,15 @@ export default function WorkflowCapture({
                 <div key={f.key}>
                   <label style={labelStyle}>{f.label}</label>
                   {f.key === "logLink" ? (
-                    (isUrl || links.length > 0) ? (
+                    (linkedLog || isUrl || links.length > 0) ? (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
-                        {isUrl && linkPill(v, "Decision log")}
+                        {linkedLog ? (
+                          <button type="button" onClick={openLinkedLog} title="Open decision log" style={{
+                            display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600,
+                            color: ACCENT, background: ACCENT_SOFT, padding: "3px 9px", borderRadius: 999,
+                            border: `1px solid ${ACCENT}`, cursor: "pointer", fontFamily: SANS, maxWidth: "100%",
+                          }}><LinkGlyph /><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{linkedLog.title}</span></button>
+                        ) : isUrl ? linkPill(v, "Decision log") : null}
                         {links.map((pl, i) => <span key={i}>{linkPill(pl.url, pl.label || pl.url)}</span>)}
                       </div>
                     ) : (
@@ -1439,14 +1560,7 @@ export default function WorkflowCapture({
                         fontSize: 12.5, fontWeight: 600, color: isAI ? ACCENT : INK,
                         fontFamily: SANS, lineHeight: 1.3,
                       }}>{row.label}</span>
-                      {row.tip && (
-                        <span title={row.tip} aria-label={row.tip} style={{
-                          flex: "0 0 auto", width: 15, height: 15, borderRadius: "50%",
-                          border: `1px solid ${BORDER}`, color: MUTED, fontSize: 9.5, fontWeight: 700,
-                          display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          cursor: "help", fontStyle: "normal", lineHeight: 1, fontFamily: SERIF,
-                        }}>i</span>
-                      )}
+                      <InfoDot text={row.tip} />
                     </span>
                   </td>
                   {columns.map((col, ci) => {
@@ -1723,6 +1837,20 @@ export default function WorkflowCapture({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Create a new decision log to link from Workflow info. */}
+      {creatingLogLink && (
+        <CreateLogModal
+          existingCodes={existingLogCodes}
+          initialWorkflowLink={typeof window !== "undefined" ? window.location.href : ""}
+          onClose={() => setCreatingLogLink(false)}
+          onCreate={(meta) => {
+            const id = onCreateLog ? onCreateLog(meta) : null;
+            if (id) linkDecisionLog(id);
+            setCreatingLogLink(false);
+          }}
+        />
       )}
 
       {/* ---------- Add to Decision Log wizard ---------- */}
