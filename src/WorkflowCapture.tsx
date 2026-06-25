@@ -917,14 +917,6 @@ export default function WorkflowCapture({
     : type === "client" ? { label: "Client", suggest: null, ph: "Client name (optional)" }
     : { label: "System", suggest: null, ph: "System name" };
 
-  useEffect(() => {
-    const l = document.createElement("link");
-    l.rel = "stylesheet";
-    l.href = "https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..600&display=swap";
-    document.head.appendChild(l);
-    return () => { document.head.removeChild(l); };
-  }, []);
-
   // Scroll to + highlight the step linked from the decision log — switching to the
   // right sub-flow first when the decision came from one.
   useEffect(() => {

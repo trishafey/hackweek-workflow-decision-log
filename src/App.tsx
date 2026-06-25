@@ -769,7 +769,7 @@ const HOME_CSS = `
 .home-nav-link:hover{color:var(--ink)}
 .home-nav-link.active{color:var(--accent);border-bottom-color:var(--accent)}
 .home-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
-.home-head h1{font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif;font-weight:600;
+.home-head h1{font-family:'Newsreader',Georgia,'Times New Roman',serif;font-weight:600;
   letter-spacing:-.01em;margin:0;font-size:34px;line-height:1.1;color:var(--accent)}
 .home-head p{margin:8px 0 0;color:var(--ink-soft);font-size:14px;max-width:54ch}
 .home-head-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}

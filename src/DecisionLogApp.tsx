@@ -1044,7 +1044,7 @@ export default function DecisionLog({
       {/* Header */}
       <header className="topbar">
         <div className="brand">
-          <h1 style={{ fontFamily: 'Georgia,"Iowan Old Style","Palatino Linotype",serif', fontWeight: 600, fontSize: 34, lineHeight: 1.1, letterSpacing: "-0.01em", color: "#1F3A34", margin: 0 }}>
+          <h1 style={{ fontFamily: "'Newsreader', Georgia, 'Times New Roman', serif", fontWeight: 600, fontSize: 34, lineHeight: 1.1, letterSpacing: "-0.01em", color: "#1F3A34", margin: 0 }}>
             Decision log: {title.replace(/^decision log:\s*/i, "")}
           </h1>
           <p className="sub">{subtitle}</p>
@@ -1515,7 +1515,7 @@ const CSS = `
   -webkit-font-smoothing:antialiased;
 }
 .dl-root *{box-sizing:border-box}
-.dl-root h1,.dl-root h2{font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif;font-weight:600;letter-spacing:-.01em;margin:0}
+.dl-root h1,.dl-root h2{font-family:'Newsreader',Georgia,'Times New Roman',serif;font-weight:600;letter-spacing:-.01em;margin:0}
 
 .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:22px}
 .brand h1{font-size:30px;line-height:1.1}
