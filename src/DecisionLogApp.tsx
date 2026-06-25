@@ -1575,11 +1575,11 @@ button.wf-link{border:none;border-bottom:1px solid var(--accent-soft);background
 .pill-dot{width:6px;height:6px;border-radius:50%}
 
 /* scrim + overlays */
-.scrim{position:fixed;inset:0;background:rgba(28,27,25,.34);z-index:40;backdrop-filter:blur(1.5px);animation:fade .15s ease}
+.scrim{position:fixed;inset:0;background:rgba(28,27,25,.34);z-index:110;backdrop-filter:blur(1.5px);animation:fade .15s ease}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 
 /* drawer */
-.drawer{position:fixed;top:0;right:0;height:100vh;width:min(480px,100vw);z-index:50;
+.drawer{position:fixed;top:0;right:0;height:100vh;width:min(480px,100vw);z-index:120;
   background:var(--surface);box-shadow:-12px 0 40px -16px rgba(0,0,0,.3);
   display:flex;flex-direction:column;animation:slide .2s cubic-bezier(.2,.7,.3,1)}
 @keyframes slide{from{transform:translateX(30px);opacity:.6}to{transform:translateX(0);opacity:1}}
@@ -1609,6 +1609,9 @@ button.wf-link{border:none;border-bottom:1px solid var(--accent-soft);background
 .input{font-family:inherit;font-size:13.5px;color:var(--ink);background:var(--surface);
   border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;transition:border-color .12s,box-shadow .12s}
 .input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+input.input[type="date"]{-webkit-appearance:none;appearance:none;min-width:0;max-width:100%}
+input.input[type="date"]::-webkit-date-and-time-value{text-align:left;margin:0}
+input.input[type="date"]::-webkit-calendar-picker-indicator{margin-left:auto;opacity:.55;cursor:pointer}
 .textarea{resize:vertical;line-height:1.45;min-height:38px}
 select.input{appearance:none;cursor:pointer;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394908A' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>");
@@ -1616,7 +1619,7 @@ select.input{appearance:none;cursor:pointer;
 .mono-in{font-family:"SF Mono",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.03em}
 
 /* modal */
-.modal{position:fixed;z-index:50;left:50%;top:50%;transform:translate(-50%,-50%);
+.modal{position:fixed;z-index:120;left:50%;top:50%;transform:translate(-50%,-50%);
   background:var(--surface);border-radius:16px;box-shadow:0 30px 70px -20px rgba(0,0,0,.4);
   width:min(720px,94vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;animation:pop .18s cubic-bezier(.2,.7,.3,1)}
 @keyframes pop{from{transform:translate(-50%,-46%);opacity:.5}to{transform:translate(-50%,-50%);opacity:1}}

@@ -1694,7 +1694,7 @@ export default function WorkflowCapture({
       </div>
 
       {view === "diagram" ? (
-        <WorkflowDiagram flows={flows} decisions={decisions} onSelectStep={goToStep} height={fullscreen ? "calc(100vh - 90px)" : undefined} />
+        <WorkflowDiagram flows={flows} decisions={decisions} onSelectStep={goToStep} height={fullscreen ? "calc(100vh - 124px)" : undefined} />
       ) : (<>
       {/* Branch lineage breadcrumb (only for sub-flows) */}
       {activeFlowId !== "main" && (() => {
