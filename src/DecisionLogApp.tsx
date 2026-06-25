@@ -272,6 +272,21 @@ export function makeId(prefix, wf, n) {
   return `${p}-${w}-${String(n).padStart(3, "0")}`;
 }
 
+// Keep IDs chronological: sort entries by date (then by their existing order for
+// ties) and reassign the sequential numbers, so a retroactively-added decision
+// renumbers everything that comes after its date.
+export function renumberByDate(entries, settings) {
+  const ordered = entries
+    .map((e, i) => ({ e, i }))
+    .sort((A, B) => {
+      const da = A.e.date || "", db = B.e.date || "";
+      if (da !== db) return da < db ? -1 : 1;
+      return A.i - B.i;
+    })
+    .map(({ e }) => e);
+  return ordered.map((e, i) => ({ ...e, id: makeId(settings.prefix, settings.workflow, i + 1) }));
+}
+
 function csvCell(v) {
   const s = (v == null ? "" : String(v));
   if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
@@ -652,6 +667,7 @@ export default function DecisionLog({
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [statusBanner, setStatusBanner] = useState(null); // { from, to, subject, workflowStep } after a status change
   const [sort, setSort] = useState({ key: "id", dir: "desc" });
 
   const [drawer, setDrawer] = useState(null); // entry being added/edited (form state)
@@ -737,6 +753,13 @@ export default function DecisionLog({
     setDrawer({ ...entry });
     setDrawerMode("edit");
   }
+  function openAddWith(extra) {
+    const e = { ...emptyEntry(), ...extra };
+    e.id = makeId(settings.prefix, settings.workflow, nextNumber(entries));
+    setAiFilled([]);
+    setDrawer(e);
+    setDrawerMode("add");
+  }
 
   /* ---- Populate missing fields ---- */
   // In the open drawer: fill empty fillable fields and highlight what changed (user saves to confirm).
@@ -783,11 +806,16 @@ export default function DecisionLog({
   function saveDrawer() {
     if (!drawer) return;
     if (drawerMode === "add") {
-      setEntries((prev) => [...prev, drawer]);
+      setEntries((prev) => renumberByDate([...prev, drawer], settings));
       flash("Decision added");
     } else {
-      setEntries((prev) => prev.map((e) => (e.id === drawer.id ? drawer : e)));
+      const orig = entries.find((e) => e.id === drawer.id);
+      setEntries((prev) => renumberByDate(prev.map((e) => (e.id === drawer.id ? drawer : e)), settings));
       flash("Decision updated");
+      // Offer to log a status change as its own decision.
+      if (orig && (orig.status || "Proposed") !== (drawer.status || "Proposed")) {
+        setStatusBanner({ from: orig.status || "Proposed", to: drawer.status || "Proposed", subject: drawer.subject || "", workflowStep: drawer.workflowStep || "" });
+      }
     }
     setDrawer(null);
   }
@@ -894,6 +922,27 @@ export default function DecisionLog({
       <datalist id="subject-list">
         {subjects.map((s) => <option key={s} value={s} />)}
       </datalist>
+
+      {/* Status-change banner: offer to log the change as its own decision */}
+      {statusBanner && (
+        <div className="status-banner">
+          <span className="status-banner-text">
+            Status update made ({statusBanner.from} → {statusBanner.to}) — would you like to add this as a decision?
+          </span>
+          <div className="status-banner-actions">
+            <button className="btn solid small" onClick={() => {
+              openAddWith({
+                subject: statusBanner.subject,
+                workflowStep: statusBanner.workflowStep,
+                status: statusBanner.to,
+                decision: `Status changed from ${statusBanner.from} to ${statusBanner.to}.`,
+              });
+              setStatusBanner(null);
+            }}>Yes</button>
+            <button className="btn ghost small" onClick={() => setStatusBanner(null)}>Skip</button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <header className="topbar">
@@ -1498,6 +1547,16 @@ button.wf-link{border:none;border-bottom:1px solid var(--accent-soft);background
 .link-pill-tbd:hover{background:var(--line-soft)}
 .link-pill-primary{color:#fff;background:var(--accent);border:none;cursor:pointer;font-family:inherit}
 .link-pill-primary:hover{background:var(--accent-ink)}
+.status-banner{position:fixed;top:0;left:0;right:0;z-index:130;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  justify-content:center;background:var(--accent);color:#fff;padding:11px 18px;
+  box-shadow:0 6px 20px -8px rgba(0,0,0,.4);animation:slideDown .22s cubic-bezier(.2,.7,.3,1)}
+@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+.status-banner-text{font-size:13px;font-weight:600;font-family:inherit}
+.status-banner-actions{display:flex;gap:8px}
+.status-banner .btn.solid{background:#fff;color:var(--accent)}
+.status-banner .btn.solid:hover{background:#eef3f0}
+.status-banner .btn.ghost{background:transparent;border-color:rgba(255,255,255,.5);color:#fff}
+.status-banner .btn.ghost:hover{background:rgba(255,255,255,.12);border-color:#fff}
 .field-hint{font-size:11.5px;color:var(--ink-faint);font-weight:400;margin:2px 0 6px}
 .related-logs{display:flex;flex-wrap:wrap;gap:6px}
 .related-log-chip{font-family:inherit;font-size:12px;font-weight:600;color:var(--ink-soft);background:var(--surface);
