@@ -1587,7 +1587,7 @@ const CSS = `
 /* table */
 .table-wrap{border:1px solid var(--line);border-radius:12px;overflow:auto;background:var(--surface);
   box-shadow:0 1px 2px rgba(0,0,0,.02);width:fit-content;max-width:100%}
-.tbl{border-collapse:collapse;font-size:13px;min-width:920px;table-layout:fixed}
+.tbl{border-collapse:collapse;font-size:13px;width:max-content;min-width:920px;table-layout:fixed}
 .tbl thead th{position:sticky;top:0;background:#FCFBF8;text-align:left;font-weight:600;
   font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);
   padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
