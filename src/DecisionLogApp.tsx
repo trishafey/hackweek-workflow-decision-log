@@ -29,16 +29,16 @@ const STATUS_STYLE = {
 
 // table column key + label + whether sortable
 const COLUMNS = [
-  { key: "id", label: "ID", w: 118, desc: "Project code (2–3 letters) · workflow code (2–3 letters) · 3-digit chronological number. Set the codes in Settings." },
+  { key: "id", label: "ID", w: 124, desc: "Project code (2–3 letters) · workflow code (2–3 letters) · 3-digit chronological number. Set the codes in Settings." },
   { key: "date", label: "Date", w: 104, desc: "When the decision was made." },
-  { key: "status", label: "Status", w: 120, desc: "The current status of the decision." },
+  { key: "status", label: "Status", w: 132, desc: "The current status of the decision." },
   { key: "subject", label: "Subject", w: 140, desc: "What the decision is about — a controlled tag, used for filtering." },
-  { key: "decision", label: "Decision", w: 380, desc: "A clear, concise statement of what was decided." },
-  { key: "context", label: "Context", w: 340, desc: "What problem or trigger led to this decision?\nInclude constraints, assumptions, or the scenario." },
-  { key: "rationale", label: "Rationale", w: 340, desc: "Why this option was chosen.\nInclude tradeoffs, risks, and constraints." },
-  { key: "workflowStep", label: "Workflow step", w: 116, desc: "Links the decision to a specific step in the workflow.\nPrevents floating, contextless decisions." },
-  { key: "decisionOwner", label: "Owner", w: 116, desc: "Who made the final decision. Establishes accountability." },
-  { key: "otherLink", label: "Other links", w: 130, desc: "Links to meeting notes, research, Lucid boards, Figma, etc." },
+  { key: "decision", label: "Decision", w: 400, desc: "A clear, concise statement of what was decided." },
+  { key: "context", label: "Context", w: 330, desc: "What problem or trigger led to this decision?\nInclude constraints, assumptions, or the scenario." },
+  { key: "rationale", label: "Rationale", w: 330, desc: "Why this option was chosen.\nInclude tradeoffs, risks, and constraints." },
+  { key: "workflowStep", label: "Workflow step", w: 120, desc: "Links the decision to a specific step in the workflow.\nPrevents floating, contextless decisions." },
+  { key: "decisionOwner", label: "Owner", w: 120, desc: "Who made the final decision. Establishes accountability." },
+  { key: "otherLink", label: "Other links", w: 116, desc: "Links to meeting notes, research, Lucid boards, Figma, etc." },
 ];
 
 // full field schema (used for forms / export / AI mapping)
