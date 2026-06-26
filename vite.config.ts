@@ -2,8 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  // Served at the domain root by the Cloudflare Worker (experiments-projects.com).
-  base: "/",
+  // Relative base so the build works both at the domain root (Cloudflare Worker,
+  // experiments-projects.com) and under a subpath (GitHub Pages preview,
+  // /hackweek-workflow-decision-log/). Safe because the app uses hash routing,
+  // so every page loads the root index.html and relative asset paths resolve.
+  base: "./",
   plugins: [react()],
   build: {
     rollupOptions: {
