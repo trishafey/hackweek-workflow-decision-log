@@ -33,11 +33,11 @@ const COLUMNS = [
   { key: "date", label: "Date", w: 104, desc: "When the decision was made." },
   { key: "status", label: "Status", w: 120, desc: "The current status of the decision." },
   { key: "subject", label: "Subject", w: 140, desc: "What the decision is about — a controlled tag, used for filtering." },
-  { key: "decision", label: "Decision", w: 280, desc: "A clear, concise statement of what was decided." },
-  { key: "context", label: "Context", w: 230, desc: "What problem or trigger led to this decision?\nInclude constraints, assumptions, or the scenario." },
-  { key: "rationale", label: "Rationale", w: 240, desc: "Why this option was chosen.\nInclude tradeoffs, risks, and constraints." },
-  { key: "workflowStep", label: "Workflow step", w: 150, desc: "Links the decision to a specific step in the workflow.\nPrevents floating, contextless decisions." },
-  { key: "decisionOwner", label: "Owner", w: 170, desc: "Who made the final decision. Establishes accountability." },
+  { key: "decision", label: "Decision", w: 380, desc: "A clear, concise statement of what was decided." },
+  { key: "context", label: "Context", w: 340, desc: "What problem or trigger led to this decision?\nInclude constraints, assumptions, or the scenario." },
+  { key: "rationale", label: "Rationale", w: 340, desc: "Why this option was chosen.\nInclude tradeoffs, risks, and constraints." },
+  { key: "workflowStep", label: "Workflow step", w: 116, desc: "Links the decision to a specific step in the workflow.\nPrevents floating, contextless decisions." },
+  { key: "decisionOwner", label: "Owner", w: 116, desc: "Who made the final decision. Establishes accountability." },
   { key: "otherLink", label: "Other links", w: 130, desc: "Links to meeting notes, research, Lucid boards, Figma, etc." },
 ];
 
