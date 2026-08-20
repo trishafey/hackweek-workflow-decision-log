@@ -1,17 +1,18 @@
 {
   "name": "hackweek-workflow-decision-log",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "node scripts/serve.mjs .",
+    "build": "node scripts/build-static.mjs",
+    "preview": "node scripts/build-static.mjs && node scripts/serve.mjs dist",
+    "deploy": "npm run build && wrangler deploy",
+    "legacy:dev": "vite --config legacy/vite.config.ts",
+    "legacy:build": "vite build --config legacy/vite.config.ts",
     "db:create": "wrangler d1 create decision-log",
     "db:migrate": "wrangler d1 migrations apply decision-log --remote",
-    "db:migrate:local": "wrangler d1 migrations apply decision-log --local",
-    "dev:worker": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy"
+    "db:migrate:local": "wrangler d1 migrations apply decision-log --local"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.1",

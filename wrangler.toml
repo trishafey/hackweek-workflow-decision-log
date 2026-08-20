@@ -1,16 +1,20 @@
-# Cloudflare Worker (with static assets) — serves the SPA and the /api routes.
+# Cloudflare Worker (with static assets) — serves the site and the /api routes.
 name = "hackweek-workflow-decision-log"
-main = "src/worker.ts"
+main = "legacy/src/worker.ts"
 compatibility_date = "2025-01-01"
 
-# Static SPA built by `npm run build` into ./dist, served by the Worker.
+# Static site staged by `npm run build` into ./dist, served by the Worker.
+# Only the root index.html (plus public/) is staged — legacy/ is never copied
+# there, so the previous Decision Log app is not served.
 [assets]
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
-# D1 database used by /api routes.
+# D1 database behind the /api routes the legacy app used. Kept so its data
+# stays reachable; the hosted page does not call it.
 [[d1_databases]]
 binding = "DB"
 database_name = "decision-log"
 database_id = "ec46ded4-e9a2-4d7f-8bf5-426da5218c23"
+migrations_dir = "legacy/migrations"
