@@ -1,10 +1,9 @@
 name: Deploy to GitHub Pages
 
-# GitHub Pages serves a project site under /hackweek-workflow-decision-log/.
-# Vite's base is "./" (relative), so the built assets resolve there and at the
-# Cloudflare root alike. This builds dist/ and publishes it via the Pages
-# artifact pipeline — it does NOT commit build output to any branch, so the
-# Cloudflare Workers build (from source) is unaffected.
+# Publishes the static site. `node scripts/build-static.mjs` stages the root
+# index.html (a single self-contained file) plus public/ into dist/, which is
+# what gets uploaded. legacy/ is not staged, so the previous Decision Log app
+# is not published. No npm install is needed — the build is a plain copy.
 
 on:
   push:
@@ -28,9 +27,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run build
+      - run: node scripts/build-static.mjs
       - uses: actions/configure-pages@v5
         with:
           enablement: true
